@@ -15,7 +15,7 @@ const RecorderTab = () => {
 
   const [cameraDevices, setCameraDevices] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState('');
-  const [useCamera, setUseCamera] = useState(true);
+  const [useCamera, setUseCamera] = useState(false);
 
   const [audioDevices, setAudioDevices] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState('');
@@ -117,22 +117,32 @@ const RecorderTab = () => {
     return 'video/webm';
   };
 
-  // Load devices with delay to avoid IPC crash on startup
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(d => d.kind === 'videoinput');
-        const mics = devices.filter(d => d.kind === 'audioinput');
+  // Load devices helper to avoid IPC crash on startup and ensure reliable selection
+  const loadMediaDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      const mics = devices.filter(d => d.kind === 'audioinput');
 
-        setCameraDevices(cameras);
-        // if (cameras.length > 0) setSelectedCamera(cameras[0].deviceId); // Don't auto-select to avoid IPC
-
-        setAudioDevices(mics);
-        if (mics.length > 0) setSelectedAudio(mics[0].deviceId); // Auto-select first real device
-      } catch (err) {
-        console.error('Error loading devices:', err);
+      setCameraDevices(cameras);
+      if (cameras.length > 0) {
+        setSelectedCamera(prev => prev || cameras[0].deviceId);
       }
+
+      setAudioDevices(mics);
+      if (mics.length > 0) {
+        setSelectedAudio(prev => prev || mics[0].deviceId);
+      }
+      return { cameras, mics };
+    } catch (err) {
+      console.error('Error loading devices:', err);
+      return { cameras: [], mics: [] };
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadMediaDevices();
     }, 1000); // 1 second delay to let Electron fully initialize
 
     return () => clearTimeout(timer);
@@ -243,15 +253,29 @@ const RecorderTab = () => {
     };
   }, []);
 
-  // Reset format when switching audio-only / camera-only mode
+  // Reset format and ensure device selection when switching audio-only / camera-only mode
   useEffect(() => {
-    setSelectedFormat(audioOnlyMode ? 'mp3' : 'webm');
-  }, [audioOnlyMode, cameraOnlyMode]);
+    if (audioOnlyMode) {
+      setSelectedFormat('mp3');
+      if (audioDevices.length > 0) {
+        setSelectedAudio(prev => prev || audioDevices[0].deviceId);
+      } else {
+        loadMediaDevices();
+      }
+    } else {
+      setSelectedFormat('webm');
+    }
+  }, [audioOnlyMode, audioDevices]);
 
-  // Camera-only mode implies camera must be on
   useEffect(() => {
-    if (cameraOnlyMode) setUseCamera(true);
-  }, [cameraOnlyMode]);
+    if (cameraOnlyMode) {
+      if (cameraDevices.length > 0) {
+        setSelectedCamera(prev => prev || cameraDevices[0].deviceId);
+      } else {
+        loadMediaDevices();
+      }
+    }
+  }, [cameraOnlyMode, cameraDevices]);
 
   // ─ Auto-load desktop and window sources on mount (with delay to avoid Electron bug #46369)
   useEffect(() => {
@@ -308,16 +332,17 @@ const RecorderTab = () => {
 
     const prevCamera = prevCameraRef.current;
 
-    // Hide camera window when camera is disabled
-    if (!useCamera) {
-      // Only hide if it was previously shown
+    // Never show floating camera window in camera-only or audio-only mode, or when useCamera is disabled
+    if (cameraOnlyMode || audioOnlyMode || !useCamera) {
       if (prevCamera !== null) {
         window.electronAPI.toggleCameraWindow(false);
       }
       prevCameraRef.current = null;
+      return;
     }
+
     // Show camera window and set source when camera is enabled and source is selected
-    else if (useCamera && selectedCamera) {
+    if (useCamera && selectedCamera) {
       // Only update if camera actually changed
       if (prevCamera !== selectedCamera) {
         window.electronAPI.setCameraSource(selectedCamera);
@@ -332,7 +357,7 @@ const RecorderTab = () => {
       }
       prevCameraRef.current = null;
     }
-  }, [selectedCamera, useCamera]);
+  }, [selectedCamera, useCamera, cameraOnlyMode, audioOnlyMode]);
 
   useEffect(() => {
     // Send complex object instead of just string
@@ -635,24 +660,45 @@ const RecorderTab = () => {
   handleStartRef.current = handleStart;
 
   const handleStartCameraOnly = async () => {
-    if (!selectedCamera) return;
+    let camId = selectedCamera || (cameraDevices.length > 0 ? cameraDevices[0].deviceId : null);
     const activeElement = document.activeElement;
     try {
-      // 1. Capture webcam at high resolution
-      const camStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: selectedCamera }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
-      });
+      // 1. Capture webcam at high resolution with fallback
+      let camStream = null;
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: camId
+            ? { deviceId: camId, width: { ideal: 1920 }, height: { ideal: 1080 } }
+            : { width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false
+        });
+      } catch (camErr) {
+        console.warn('High-res camera capture failed, falling back to basic video:', camErr);
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: camId ? { deviceId: camId } : true,
+          audio: false
+        });
+      }
 
-      // 2. Capture Microphone (if selected)
+      if (!camId && camStream) {
+        const track = camStream.getVideoTracks()[0];
+        const s = track?.getSettings();
+        if (s?.deviceId) setSelectedCamera(s.deviceId);
+      }
+
+      // 2. Capture Microphone (if selected or available)
       let micStream = null;
-      if (selectedAudio) {
+      const micId = selectedAudio || (audioDevices.length > 0 ? audioDevices[0].deviceId : null);
+      if (micId) {
         try {
           micStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: selectedAudio } }, video: false
+            audio: { deviceId: micId }, video: false
           });
         } catch (err) {
-          console.error('Failed to get microphone stream:', err);
+          console.warn('Failed to get mic stream with deviceId, trying default audio:', err);
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          } catch {}
         }
       }
 
@@ -741,26 +787,44 @@ const RecorderTab = () => {
       let sysStream = null;
       let micStream = null;
 
-      if (recordSystemAudio && desktopSources.length > 0) {
-        const srcId = selectedDesktopSource || desktopSources[0].id;
-        sysStream = await navigator.mediaDevices.getUserMedia({
-          audio: { mandatory: { chromeMediaSource: 'desktop' } },
-          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: srcId } }
-        });
-        sysStream.getVideoTracks().forEach(t => t.stop());
-      }
-
-      if (selectedAudio) {
+      if (recordSystemAudio) {
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: selectedAudio } }, video: false
-          });
-        } catch (err) {
-          console.error('Mic capture failed:', err);
+          let sources = desktopSources;
+          if ((!sources || sources.length === 0) && window.electronAPI?.getDesktopSources) {
+            sources = await window.electronAPI.getDesktopSources();
+            setDesktopSources(sources || []);
+          }
+          if (sources && sources.length > 0) {
+            const srcId = selectedDesktopSource || sources[0].id;
+            sysStream = await navigator.mediaDevices.getUserMedia({
+              audio: { mandatory: { chromeMediaSource: 'desktop' } },
+              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: srcId } }
+            });
+            sysStream.getVideoTracks().forEach(t => t.stop());
+          }
+        } catch (sysErr) {
+          console.warn('System audio capture failed in audio-only mode:', sysErr);
         }
       }
 
-      if (!sysStream && !micStream) throw new Error('No audio source available');
+      const micId = selectedAudio || (!recordSystemAudio && audioDevices.length > 0 ? audioDevices[0].deviceId : null);
+      if (micId || (!recordSystemAudio && !sysStream)) {
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: micId ? { deviceId: micId } : true,
+            video: false
+          });
+        } catch (err) {
+          console.warn('Mic capture failed with deviceId, trying default audio:', err);
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          } catch (micErr) {
+            console.error('All mic capture attempts failed:', micErr);
+          }
+        }
+      }
+
+      if (!sysStream && !micStream) throw new Error('Nenhum dispositivo de áudio (microfone ou áudio do sistema) disponível.');
 
       // Mix all sources through a single AudioContext so MediaRecorder gets one clean track
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -810,14 +874,17 @@ const RecorderTab = () => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
       mediaRecorder.onstop = async () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          try { mediaRecorder.requestData(); } catch {}
+        }
         await new Promise(r => setTimeout(r, 300));
         if (sysStream) sysStream.getTracks().forEach(t => t.stop());
         if (micStream) micStream.getTracks().forEach(t => t.stop());
-        audioCtx.close();
+        try { audioCtx.close(); } catch {}
         micGainNodeRef.current = null;
         if (chunksRef.current.length === 0) return;
         const blob = new Blob(chunksRef.current, { type: audioMime });
-        if (blob.size < 512) return;
+        if (blob.size < 100) return;
         recordedBufferRef.current = await blob.arrayBuffer();
         chunksRef.current = [];
       };
@@ -1290,7 +1357,7 @@ const RecorderTab = () => {
               disabled={isRecording}
               tabIndex="0"
             >
-              {cameraDevices.length === 0 && (
+              {(!selectedCamera || cameraDevices.length === 0) && (
                 <option value="">{t('recorder.selectCamera')}</option>
               )}
               {cameraDevices.map(s => (
@@ -1405,6 +1472,9 @@ const RecorderTab = () => {
               onChange={(e) => setSelectedCamera(e.target.value)}
               tabIndex="0"
             >
+              {(!selectedCamera || cameraDevices.length === 0) && (
+                <option value="">{t('recorder.selectCamera')}</option>
+              )}
               {cameraDevices.map(s => (
                 <option key={s.deviceId} value={s.deviceId}>{s.label || `Camera ${s.deviceId}`}</option>
               ))}
@@ -1490,9 +1560,9 @@ const RecorderTab = () => {
             className="btn-main btn-start"
             onClick={handleStart}
             disabled={audioOnlyMode
-              ? (!selectedAudio && !recordSystemAudio)
+              ? (audioDevices.length === 0 && !selectedAudio && !recordSystemAudio)
               : cameraOnlyMode
-                ? !selectedCamera
+                ? (cameraDevices.length === 0 && !selectedCamera)
                 : (captureMode === 'window' ? !selectedWindowSource : !selectedDesktopSource)}
             aria-label={t('recorder.rec')}
           >

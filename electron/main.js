@@ -840,14 +840,14 @@ function convertVideo(inputPath, outputPath, format, settings, progressCallback)
 
         if (format === 'webm') {
             command.outputOptions([
-                '-map 0:v:0',
+                '-map 0:v:0?',
                 '-map 0:a:0?',
                 '-c:v copy',
                 '-c:a copy'
             ]);
         } else if (format === 'mp4') {
             command.outputOptions([
-                '-map 0:v:0',
+                '-map 0:v:0?',
                 '-map 0:a:0?',
                 `-vf ${vf}`,
                 '-c:v libx264',
@@ -860,7 +860,7 @@ function convertVideo(inputPath, outputPath, format, settings, progressCallback)
             ]);
         } else if (format === 'mkv') {
             command.outputOptions([
-                '-map 0:v:0',
+                '-map 0:v:0?',
                 '-map 0:a:0?',
                 `-vf ${vf}`,
                 '-c:v libx264',

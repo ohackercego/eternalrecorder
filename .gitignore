@@ -5,32 +5,12 @@ __pycache__/
 .venv/
 venv/
 
-# ── runtime embarcado e artefatos de build ──
-# Gerados por scripts/empacotar.py; não vão para o git (113 MB de ZIP)
-python-embed/
+# ── build ──
 dist/
-_empacotar/
-.cache-python/
-
-# ── saída de gravações de teste ──
-*.mp4
-*.mkv
-*.mov
-*.flv
-*.mp3
-*.wav
-*.flac
-*.m4a
-!docs/**/*.mp4
-
-# ── configuração local ──
-config.ini
-*.log
-
-# ── sistema ──
-Thumbs.db
-desktop.ini
-.DS_Store
-dist_cxfreeze/
-build_cxfreeze/
 dist_pyinstaller/
+dist_cxfreeze/
+build_pyinstaller/
+build_cxfreeze/
+_empacotar/
+python-embed/
+*.spec.bak

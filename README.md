@@ -1,200 +1,158 @@
 # Eternal Recorder
 
-Gravador de tela, janela e câmera **100% acessível para leitores de tela** (NVDA, JAWS), em Python puro com libobs.
+A **fully screen-reader accessible** (NVDA, JAWS) screen, window and camera recorder for Windows, built in pure Python with libobs.
 
-**Versão 2.1.2** · Windows 10/11 · GPL v2
+**Version 2.2.2** · Windows 10/11 · GPL v2 · [Baixar em português](#português)
 
----
+## Downloads
 
-## Por que o Eternal Recorder existe
+Get the latest version from the [Releases page](https://github.com/ohackercego/eternalrecorder/releases/latest):
 
-A maioria dos gravadores de tela não funciona com leitores de tela: botões sem nome, estados que não são anunciados, teclado que não navega. O Eternal Recorder foi construído **do zero** com acessibilidade como requisito — cada controle tem nome, cada estado é falado, cada função tem atalho de teclado.
+- **Eternal Recorder (zip)** — extract and run `Eternal Recorder.exe` (recommended)
+- **Eternal Recorder (single executable)** — one standalone `.exe` (experimental)
 
-## Recursos
+No installer, no Python, no Node required.
 
-### Gravação
-- **Tela inteira** (qualquer monitor)
-- **Janela específica** — com áudio **daquele aplicativo** (process loopback), não do sistema
-- **Câmera** com sobreposição em qualquer canto e tamanho
-- **Somente áudio** (mp3, wav, flac)
-- Mic + áudio do sistema, ou cada um separadamente
-- Ganho de áudio **opcional** — por padrão segue o volume do mixer do Windows
-- Pausar, retomar, mutar microfone ao vivo
+## Highlights
 
-### Cenas (presets) com troca ao vivo
-- Cada cena salva: fonte de vídeo, alvo, **áudio**, câmera sobreposta (canto + tamanho)
-- **Ctrl+1 a Ctrl+0** troca de cena **ao vivo, em qualquer lugar** — durante a gravação ou a transmissão
-- **1-9 e 0** trocam com a janela do app focada
-- A troca muda o vídeo **e** o áudio na hora, no mesmo arquivo
+- **Live scene switching**: press **1–9 and 0** (with the app window focused) to switch scenes instantly — video **and** audio change in the same recording file
+- **Window audio**: records the audio of the chosen application only, not the whole system
+- **Optional audio gain**: by default follows the Windows mixer volume
+- **Camera overlay**: picture-in-picture webcam in any corner and size
+- **Streaming**: RTMP live to Twitch, YouTube or Facebook while recording
+- **25 languages** with full translation
+- **Tray**: closing minimizes to the tray; recording keeps running
+- **libobs engine** (pylibobs): real composition, hardware encoders, RTMP
 
-### Transmissão
-- RTMP ao vivo (Twitch, YouTube, Facebook, custom) enquanto grava
-- A transmissão usa o preset da cena ativa
+## Shortcuts
 
-### Acessibilidade
-- Cada controle com nome acessível — nada de botão anônimo
-- Estados falados: gravando, pausada, encerrada, arquivo salvo, erro
-- Navegação por Tab completa, incluindo campos somente leitura
-- Modo cena anunciado ao ativar, com o resumo do preset
-- Fala por NVDA/JAWS (accessible_output2)
-
-### Bandeja e menu
-- Fechar minimiza para a **bandeja** (configurável)
-- Menu da bandeja: Reabrir · **Projeto no GitHub** · Sair
-- **F10** abre o menu de qualquer lugar
-- **Alt+S** abre o menu Sistema da janela
-
----
-
-## Atalhos e teclas — o que funciona de verdade
-
-### Trocar de cena
-
-| Tecla | Onde funciona | O que faz |
+| Key | Where | Action |
 |---|---|---|
-| **1** a **9** e **0** | com a janela do Eternal em foco | troca para a cena 1-10 **na hora** — muda o vídeo e o áudio na gravação em andamento |
+| **1–9, 0** | app window focused | switch to scene 1–10 (0 = scene 10) |
+| `Ctrl+Shift+R` | global | record / stop |
+| `Ctrl+Shift+S` | global | stop |
+| `Ctrl+Shift+P` | global | pause / resume |
+| `Ctrl+Shift+M` | global | mute microphone |
+| `Ctrl+Shift+A` | global | toggle system audio |
+| `Ctrl+Shift+H` | global | reopen from tray |
+| `Alt+S` | app window focused | System menu (GitHub, Quit) |
+| `F10` | global | tray menu (GitHub, Quit) |
 
-> **Importante:** as teclas de 1 a 0 são a forma **confiável** de trocar de cena.
-> A tecla **0** ativa a cena 10.
-> Precisa do **Modo Cena marcado** na aba Gravação e de uma cena ativada na aba Cenas.
+## Feature guide
 
-Ao trocar, o app **fala** qual cena entrou: "Cena 2 aplicada ao vivo... Áudio: áudio do sistema".
+### Recording tab
 
-### Gravação
+Choose what to capture:
 
-| Tecla | Ação |
-|---|---|
-| `Ctrl+Shift+R` | Gravar / parar |
-| `Ctrl+Shift+S` | Parar |
-| `Ctrl+Shift+P` | Pausar / retomar |
-| `Ctrl+Shift+M` | Mutar microfone |
-| `Ctrl+Shift+A` | Marcar/desmarcar áudio do sistema |
-| `Ctrl+Shift+H` | Reabrir do modo bandeja |
+- **Full screen** — records an entire monitor (pick which one).
+- **Specific window** — records a single window (a game, a browser). Window audio comes **from that program**, not the whole PC.
+- **Camera only** — full-screen webcam recording.
 
-### Menu
+**Microphone** adds your voice; **system audio** captures what plays on the PC. **Use camera** overlays your webcam picture-in-picture (corner and size configurable). **Format**: MP4 (universal), MKV (crash-resilient), WebM (light); audio-only: MP3, WAV, FLAC.
 
-| Tecla | Ação |
-|---|---|
-| `Alt+S` | Abre o menu Sistema (Reabrir / GitHub / Sair) |
-| `F10` | Abre o mesmo menu, global |
+**Scene mode** enables the scene keys. While recording, options are locked — stop to change them.
 
----
+### Scenes tab
 
-## Guia das funções — para quem nunca usou um gravador
+A scene is a **complete preset**: which screen/window/camera, which audio, where the camera overlay goes.
 
-### Aba Gravação
+1. Configure the preset, type a name, click **Add scene**
+2. The scene gets a number — that's the key that activates it (1–9, 0 for the 10th)
 
-**Tela para gravar.** Escolha o que capturar:
-- *Tela cheia* — grava o monitor inteiro. Se você tiver dois monitores, escolha qual.
-- *Janela específica* — grava só uma janela (um jogo, um navegador). O áudio da janela vem **daquele programa**, não do PC todo: se tocar música em outro programa, ela NÃO entra.
-- *Somente câmera* — grava só a webcam, em tela cheia.
+During a recording, press the scene number and **everything switches live, in the same file**.
 
-**Microfone.** Marque para a sua voz entrar na gravação. Desmarque para gravar só o que toca no PC.
+### Streaming tab
 
-**Áudio do sistema.** Marque para capturar tudo que toca no computador (vídeos, jogos, chamadas). No modo janela, o áudio vem só da janela escolhida.
+Go live on Twitch, YouTube or Facebook while recording: pick the platform, paste your **stream key**, add the destination, start recording, then click **Start streaming**. The scene selector on the tab chooses what goes on air.
 
-**Usar câmera.** Coloca sua webcam num quadro pequeno no canto da gravação — o clássico "rosto no canto". Você escolhe o canto e o tamanho.
+### Settings tab
 
-**Formato.** MP4 abre em qualquer lugar; MKV é o mais resistente a falhas; WebM é mais leve. Para só áudio: MP3 (pequeno), WAV (qualidade máxima), FLAC (sem perdas).
+- **Quality**: FPS, resolution, video/audio bitrate
+- **Gain**: keep "follow the system (recommended)" — the Windows mixer volume is what gets recorded
+- **Recording folder**: where files are saved
+- **Close behavior**: "go to tray" (recording continues) or "exit"
+- **Shortcuts**: click to remap
+- **Language**: 25 languages, applied instantly
 
-**Modo cena.** Marque para usar as cenas da aba Cenas. Desmarcado, as teclas de cena não fazem nada.
+### Tray and menu
 
-O botão grande inicia e para. Enquanto grava, as opções ficam travadas — pare a gravação para mudar.
+Closing the app hides it to the **tray** (icon near the clock) and recordings keep going. Right-click the icon for the menu: **GitHub project** (opens this repository) and **Quit**. Also available via `Alt+S` (focused) or `F10` (global).
 
-### Aba Cenas
+## Troubleshooting
 
-Uma cena é um **preset completo**: qual tela/janela/câmera gravar, qual áudio usar, onde a câmera fica.
+The app logs everything to `%LOCALAPPDATA%\EternalRecorder\logs` (one file per day). When something goes wrong, that file shows exactly what the app tried — attach it to bug reports.
 
-1. Escolha o vídeo, o áudio e a câmera no quadro "Preset da cena"
-2. Digite um nome e clique **Adicionar cena**
-3. A cena ganha um número: é a tecla que ativa ela (1 a 9, 0 para a 10ª)
+## Build from source
 
-Durante a gravação, aperte o número da cena e **tudo muda na hora, no mesmo arquivo** — trocou de tela pra janela, o áudio da janela entra e o microfone sai (ou fica, dependendo do que a cena diz).
-
-**Salvar no selecionado** atualiza a cena que está selecionada com o preset atual.
-
-**Ativar cena** aplica a cena selecionada — o mesmo que apertar o número.
-
-### Aba Transmissão
-
-Manda a gravação **ao vivo** para Twitch, YouTube ou Facebook enquanto grava.
-
-1. Escolha a plataforma (a URL se preenche sozinha)
-2. Cole a **chave de stream** (o painel da plataforma te dá)
-3. Clique **Adicionar destino**
-4. Inicie a gravação na aba Gravação
-5. Clique **Iniciar transmissão**
-
-O que vai ao ar é o preset da cena ativa. O quadro "O que vai ao ar" mostra exatamente isso.
-
-### Aba Configurações
-
-**Qualidade.** FPS (30 é o normal), resolução (Fonte usa a resolução nativa da tela), vídeo e áudio em kbps — mais = melhor qualidade e arquivo maior.
-
-**Ganho do microfone / do sistema.** Deixe em **"seguir o sistema (recomendado)"**: o volume que você ajusta no Windows é o que grava. Os números (6, 12, 18 dB) multiplicam o volume — só use se o áudio ficou baixo mesmo com o Windows no máximo.
-
-**Pasta das gravações.** Onde os arquivos são salvos. O botão anuncia a pasta atual e abre o seletor.
-
-**Comportamento ao fechar.** "Ir para a bandeja" mantém o app rodando em segundo plano quando você fecha (a gravação continua). "Sair" encerra de verdade.
-
-**Atalhos.** Teclas das funções principais — clique para trocar.
-
-**Idioma.** 25 idiomas. Trocou, a interface reconstrói na hora.
-
-### Bandeja e menu
-
-Ao fechar, o app vai para a **bandeja** (ícone perto do relógio) e a gravação continua. Clique no ícone para reabrir. Clique com o **botão direito** para o menu:
-
-- **Reabrir Eternal Recorder** — abre a janela
-- **Projeto no GitHub** — abre este repositório no navegador
-- **Sair** — encerra de verdade
-
-O menu também abre com **Alt+S** (janela focada) ou **F10** (qualquer lugar).
-
-### Solução de problemas
-
-O app registra tudo em `%LOCALAPPDATA%\EternalRecorder\logs` (um arquivo por dia). Se algo não funcionar, esse arquivo mostra exatamente o que o app tentou fazer — anexe ele no relatório do bug.
-
-## Instalação
-
-Baixe o **zip** da [última release](https://github.com/ohackercego/eternalrecorder/releases), extraia e execute `Eternal Recorder.exe`.
-
-Não precisa de instalação, Python ou Node.
-
-## Código-fonte
-
-O projeto é **Python puro**:
-
-```
-launcher.py            entrada
-ui/                    wxPython acessível (app, painéis, fala, i18n)
-engine/motor_obs.py    motor libobs (cenas, fontes, encoders, RTMP)
-engine/remux.py        conserta container no stop (MKV -> MP4/MP3)
-engine/config.py       configurações
-engine/logs.py         logging em %LOCALAPPDATA%\EternalRecorder\logs
-```
-
-### Desenvolvimento
+Requires Python 3.12+:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
 pip install -r requirements.txt
 python launcher.py
 ```
 
-Dependências principais: wxPython, pylibobs, PyAV, sounddevice, numpy, accessible_output2.
+Packaging:
 
-### Idiomas
+```bash
+# single executable (PyInstaller)
+pyinstaller eternal.spec
 
-25 idiomas incluídos (pt-BR, en, es, ru, fr, de, zh, ja, ar, he, entre outros). Troque na aba Configurações — a interface é reconstruída no idioma novo na hora.
+# portable folder (cx_Freeze)
+python setup_cxfreeze.py build_exe
+```
 
----
+## Portuguese (original)
+
+<details>
+<summary><b>Leia-me em português</b></summary>
+
+# Eternal Recorder
+
+Gravador de tela, janela e câmera **100% acessível para leitores de tela** (NVDA, JAWS), em Python puro com libobs.
+
+## Destaques
+
+- **Troca de cena ao vivo**: teclas **1–9 e 0** (janela em foco) trocam de cena na hora — vídeo **e** áudio mudam no mesmo arquivo
+- **Áudio da janela**: captura o áudio do aplicativo escolhido, não do sistema
+- **Ganho opcional**: por padrão segue o volume do mixer do Windows
+- **Câmera sobreposta**: webcam em quadro no canto que você escolher
+- **Transmissão**: RTMP ao vivo para Twitch, YouTube ou Facebook
+- **25 idiomas** com tradução completa
+- **Bandeja**: fechar minimiza; a gravação continua
+- **Motor libobs** (pylibobs): composição real, encoders de hardware, RTMP
+
+## Atalhos
+
+| Tecla | Onde | Ação |
+|---|---|---|
+| **1–9, 0** | janela em foco | troca para a cena 1–10 |
+| `Ctrl+Shift+R` | global | gravar / parar |
+| `Ctrl+Shift+S` | global | parar |
+| `Ctrl+Shift+P` | global | pausar / retomar |
+| `Ctrl+Shift+M` | global | mutar microfone |
+| `Ctrl+Shift+A` | global | áudio do sistema |
+| `Ctrl+Shift+H` | global | reabrir da bandeja |
+| `Alt+S` | janela em foco | menu Sistema (GitHub, Sair) |
+| `F10` | global | menu da bandeja |
+
+## Guia das funções
+
+**Aba Gravação**: tela cheia (escolhe o monitor), janela específica (o áudio vem **daquele programa**) ou somente câmera. Microfone e áudio do sistema marcam o que entra. **Usar câmera** põe a webcam em quadro no canto. Formatos: MP4, MKV, WebM; só áudio: MP3, WAV, FLAC. **Modo cena** liga as teclas de cena. Opções travam durante a gravação.
+
+**Aba Cenas**: uma cena é um **preset completo**. Configure, dê um nome, **Adicionar cena**. O número da cena é a tecla que ativa (1–9, 0 para a 10ª). Na gravação, aperte o número e **tudo muda ao vivo, no mesmo arquivo**.
+
+**Aba Transmissão**: escolha a plataforma, cole a **chave de stream**, adicione o destino, inicie a gravação e clique **Iniciar transmissão**. O seletor de cena da própria aba escolhe o que vai ao ar.
+
+**Aba Configurações**: FPS, resolução, bitrate; ganho ("seguir o sistema" é o recomendado); pasta das gravações; fechar vai para a bandeja ou sai; atalhos clicáveis; 25 idiomas na hora.
+
+**Bandeja**: fechar esconde o app (gravação continua). Botão direito no ícone: **Projeto no GitHub** e **Sair**. Também com `Alt+S` ou `F10`.
+
+## Solução de problemas
+
+O app registra tudo em `%LOCALAPPDATA%\EternalRecorder\logs` (um arquivo por dia). Anexe o arquivo do dia no relatório do bug.
 
 ## Licença
 
-**GPL v2** — compatível com a licença do libobs. Veja [LICENSE](LICENSE).
+GPL v2 — see [LICENSE](LICENSE).
 
-## Autor
-
-Juan Mathews Rebello Santos — [GitHub](https://github.com/ohackercego)
+</details>

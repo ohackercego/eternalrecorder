@@ -71,16 +71,16 @@ class DialogoAtalho(wx.Dialog):
 
         linha = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_limpar = a11y.botao(
-            self, lambda: "Limpar", lambda e: self._limpar(),
-            lambda: "Limpar atalho")
+            self, lambda: t("atalho.limpar"), lambda e: self._limpar(),
+            lambda: t("atalho.limparDica"))
         linha.Add(self.btn_limpar, 1, wx.RIGHT, 8)
         self.btn_ok = a11y.botao(
-            self, lambda: "Salvar", lambda e: self._confirmar(),
-            lambda: "Salvar atalho")
+            self, lambda: t("atalho.salvar"), lambda e: self._confirmar(),
+            lambda: t("atalho.salvarDica"))
         linha.Add(self.btn_ok, 1, wx.RIGHT, 8)
         self.btn_cancelar = a11y.botao(
-            self, lambda: "Cancelar", lambda e: self._cancelar(),
-            lambda: "Cancelar e fechar sem salvar")
+            self, lambda: t("atalho.cancelar"), lambda e: self._cancelar(),
+            lambda: t("atalho.cancelarDica"))
         linha.Add(self.btn_cancelar, 1)
         s.Add(linha, 0, wx.EXPAND | wx.ALL, 12)
 

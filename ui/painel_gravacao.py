@@ -90,12 +90,12 @@ class PainelGravacao(wx.Panel):
         linha_f.Add(self.escolha_fonte, 0, wx.RIGHT, 8)
         self.escolha_alvo = wx.Choice(self.caixa_fonte, choices=["—"])
         a11y.aplicar(self.escolha_alvo, a11y.EscolhaAcessivel(
-            self.escolha_alvo, "Alvo da gravação"))
+            self.escolha_alvo, t("recorder.alvoGravacao")))
         linha_f.Add(self.escolha_alvo, 1, wx.RIGHT, 8)
         self.btn_recarregar = a11y.botao(
-            self.caixa_fonte, lambda: "Atualizar",
+            self.caixa_fonte, lambda: t("recorder.atualizar"),
             lambda e: self.CarregarAlvos(),
-            lambda: "Atualizar lista de alvos")
+            lambda: t("recorder.atualizarLista"))
         linha_f.Add(self.btn_recarregar, 0)
         self.box_fonte.Add(linha_f, 0, wx.EXPAND | wx.ALL, 8)
         s.Add(self.box_fonte, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
@@ -246,9 +246,9 @@ class PainelGravacao(wx.Panel):
         linha_b.Add(self.btn_pausar, 1, wx.RIGHT, 8)
 
         self.btn_mudo = a11y.botao(
-            self, lambda: "Mudo", lambda e: self._alternar_mudo(),
-            lambda: ("Reativar microfone" if self.mudo
-                     else "Silenciar microfone"))
+            self, lambda: t("recorder.mudo"), lambda e: self._alternar_mudo(),
+            lambda: (t("recorder.reativarMic") if self.mudo
+                     else t("recorder.silenciarMic")))
         self.btn_mudo.Enable(False)
         linha_b.Add(self.btn_mudo, 1, wx.RIGHT, 8)
 
@@ -298,7 +298,7 @@ class PainelGravacao(wx.Panel):
             return t("recorder.cameraOnlyMode")
         if self.modo_audio:
             return t("recorder.audioOnlyMode")
-        return "Gravação normal"
+        return t("recorder.modoNormal")
 
     def _aplicar_modo(self) -> None:
         """Mostra/esconde seções conforme o modo — igual ao original."""
@@ -392,17 +392,18 @@ class PainelGravacao(wx.Panel):
 
     def CarregarAlvos(self) -> None:
         if not self.motor or not self.motor.disponivel:
-            self.escolha_alvo.Set(["motor indisponível"])
+            self.escolha_alvo.Set([t("motor.motorIndisponivel")])
             return
         try:
             if self.escolha_fonte.GetSelection() == 0:
                 itens = [f"{m['largura']}x{m['altura']}"
-                         + (" (principal)" if m["principal"] else "")
+                         + (f" ({t('recorder.monitorPrincipal')})"
+                            if m["principal"] else "")
                          for m in self.motor.monitores()]
             else:
                 itens = [j["titulo"][:70] for j in self.motor.janelas()]
         except Exception as e:
-            itens = [f"erro: {e}"]
+            itens = [f"{t('recorder.erro')}: {e}"]
         self.escolha_alvo.Set(itens or ["—"])
         if itens:
             self.escolha_alvo.SetSelection(0)
@@ -414,7 +415,8 @@ class PainelGravacao(wx.Panel):
         try:
             mics = self.motor.microfones()
             self.escolha_mic.Set([t("recorder.selectMicrophone")] +
-                                 [m["nome"] + (" (padrão)" if m["padrao"] else "")
+                                 [m["nome"] + (f" ({t('recorder.padrao')})"
+                                               if m["padrao"] else "")
                                   for m in mics])
             if mics:
                 self.escolha_mic.SetSelection(1)

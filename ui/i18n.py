@@ -53,7 +53,7 @@ def _detectar() -> str:
     if base == "zh":
         cands = ["zh-yue", "zh-TW", "zh", "en"]
     for cand in cands:
-        for f in _LOCALES.glob("*.json"):
+        for f in _LOCAIS.glob("*.json"):
             if f.stem.lower() == cand.lower():
                 return f.stem
     return "en"
@@ -63,9 +63,9 @@ def carregar(idioma: Optional[str] = None) -> str:
     """Carrega o idioma (ou o do sistema). Devolve o código aplicado."""
     global _dados, _idioma, _plano
     escolhido = idioma or _detectar()
-    caminho = _LOCALES / f"{escolhido}.json"
+    caminho = _LOCAIS / f"{escolhido}.json"
     if not caminho.exists():
-        caminho = _LOCALES / "en.json"
+        caminho = _LOCAIS / "en.json"
         escolhido = "en"
     try:
         _dados = json.loads(caminho.read_text(encoding="utf-8"))
@@ -73,7 +73,7 @@ def carregar(idioma: Optional[str] = None) -> str:
         _dados = {}
     _idioma = escolhido
     base: dict[str, str] = {}
-    en = _LOCALES / "en.json"
+    en = _LOCAIS / "en.json"
     if en.exists() and escolhido != "en":
         try:
             base = _achatar(json.loads(en.read_text(encoding="utf-8")))
@@ -102,7 +102,7 @@ def t(chave: str, **kwargs: Any) -> str:
 
 
 def disponiveis() -> list[str]:
-    return sorted(f.stem for f in _LOCALES.glob("*.json"))
+    return sorted(f.stem for f in _LOCAIS.glob("*.json"))
 
 
 # idioma padrão ao importar

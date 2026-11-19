@@ -76,7 +76,7 @@ class PainelCenas(wx.Panel):
         caixa = wx.StaticBoxSizer(wx.VERTICAL, self, t("tabs.scenes"))
         # ListaAcessivel: nome só no childId 0. Sobrescrever todos os childIds
         # faz o leitor entrar em laço e a janela TRAVAR ao descer a lista.
-        self.lista = a11y.lista(self, lambda: "Cenas")
+        self.lista = a11y.lista(self, lambda: t("tabs.scenes"))
         self.lista.InsertColumn(0, t("cenas.colNome"), width=180)
         self.lista.InsertColumn(1, t("cenas.colPreset"), width=430)
         self.lista.Bind(wx.EVT_LIST_ITEM_ACTIVATED, lambda e: self._ativar())
@@ -129,17 +129,17 @@ class PainelCenas(wx.Panel):
 
         # câmera sobreposta (só faz sentido com monitor/janela)
         self.chk_cam_sobre = a11y.caixa(
-            caixa_ed, lambda: "Usar câmera sobreposta na gravação")
+            caixa_ed, lambda: t("cenas.camSobreposta"))
         editor.Add(self.chk_cam_sobre, 0, wx.ALL, 6)
         l_sobre = wx.BoxSizer(wx.HORIZONTAL)
-        l_sobre.Add(a11y.rotulo(caixa_ed, lambda: "Canto da câmera"), 0,
+        l_sobre.Add(a11y.rotulo(caixa_ed, lambda: t("cenas.cantoCam")), 0,
                     wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         self.escolha_canto = wx.Choice(caixa_ed, choices=CANTOS_ROTULOS())
         self.escolha_canto.SetSelection(1)
         a11y.aplicar(self.escolha_canto, a11y.EscolhaAcessivel(
             self.escolha_canto, "Canto da câmera sobreposta"))
         l_sobre.Add(self.escolha_canto, 1, wx.RIGHT, 8)
-        l_sobre.Add(a11y.rotulo(caixa_ed, lambda: "Tamanho"), 0,
+        l_sobre.Add(a11y.rotulo(caixa_ed, lambda: t("cenas.tamanhoCam")), 0,
                     wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         self.escolha_tam = wx.Choice(caixa_ed, choices=TAMANHOS_ROTULOS())
         self.escolha_tam.SetSelection(1)
@@ -152,17 +152,17 @@ class PainelCenas(wx.Panel):
         # ── botões ──
         linha3 = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_nova = a11y.botao(
-            self, lambda: "Adicionar cena", lambda e: self._nova(),
-            lambda: "Adicionar cena com o preset acima")
+            self, lambda: t("cenas.btnNova"), lambda e: self._nova(),
+            lambda: t("cenas.btnNovaDica"))
         linha3.Add(self.btn_nova, 1, wx.RIGHT, 8)
         self.btn_atualizar = a11y.botao(
-            self, lambda: "Salvar no selecionado",
+            self, lambda: t("cenas.btnSalvar"),
             lambda e: self._atualizar(),
-            lambda: "Salvar o preset na cena selecionada")
+            lambda: t("cenas.btnSalvarDica"))
         linha3.Add(self.btn_atualizar, 1, wx.RIGHT, 8)
         self.btn_ativar = a11y.botao(
-            self, lambda: "Ativar cena", lambda e: self._ativar(),
-            lambda: "Ativar cena selecionada")
+            self, lambda: t("cenas.btnAtivar"), lambda e: self._ativar(),
+            lambda: t("cenas.btnAtivarDica"))
         linha3.Add(self.btn_ativar, 1, wx.RIGHT, 8)
         self.btn_excluir = a11y.botao(
             self, lambda: t("scenes.deleteScene"), lambda e: self._excluir(),

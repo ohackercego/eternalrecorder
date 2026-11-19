@@ -102,7 +102,19 @@
     "recordingNow": "Gravando",
     "statusMicMuted": "Microfone silenciado",
     "statusMicUnmuted": "Microfone ativado",
-    "openFolderFailed": "Não foi possível abrir a pasta"
+    "openFolderFailed": "Não foi possível abrir a pasta",
+    "monitorPrincipal": " (principal)",
+    "padrao": " (padrão)",
+    "erro": "Erro",
+    "alvoGravacao": "Alvo da gravação",
+    "atualizar": "Atualizar",
+    "atualizarLista": "Atualizar lista de alvos",
+    "mudo": "Mudo",
+    "reativarMic": "Reativar microfone",
+    "silenciarMic": "Silenciar microfone",
+    "dispMicrofone": "Dispositivo de microfone",
+    "sairDeVerdade": "Sair de verdade",
+    "modoNormal": "Gravação normal"
   },
   "scenes": {
     "hint": "Clique em uma cena para aplicar as configurações. Durante a gravação, clique para trocar ao vivo.",
@@ -259,7 +271,10 @@
     "resumoCam": "câmera sobreposta",
     "cenaNaoExiste": "Tecla {n}: não há cena {n}. {total} cena(s) cadastrada(s).",
     "ativaStatus": "Cena ativa: {n} — {nome}",
-    "nenhumaAtiva": "Nenhuma cena ativa"
+    "nenhumaAtiva": "Nenhuma cena ativa",
+    "btnNovaDica": "Adicionar cena com o preset acima",
+    "btnSalvarDica": "Salvar o preset na cena selecionada",
+    "btnAtivarDica": "Ativar cena selecionada"
   },
   "bandeja": {
     "escondeu": "Eternal Recorder minimizado para a bandeja. A gravação continua se estiver ativa.",
@@ -292,7 +307,13 @@
     "pressioneAntes": "Pressione uma combinação antes de salvar.",
     "precisaModificador": "Adicione Control, Alt ou Shift",
     "removido": "Atalho removido",
-    "definir": "Definir…"
+    "definir": "Definir…",
+    "limpar": "Limpar",
+    "limparDica": "Limpar atalho",
+    "salvar": "Salvar",
+    "salvarDica": "Salvar atalho",
+    "cancelar": "Cancelar",
+    "cancelarDica": "Cancelar e fechar sem salvar"
   },
   "config": {
     "pastaPadraoRestaurada": "Pasta padrão restaurada",
@@ -307,12 +328,14 @@
     "pastaAtualEh": "A pasta atual é {pasta}. Clique aqui para escolher uma nova pasta",
     "pastaAlterada": "Pasta alterada. A pasta atual é {pasta}",
     "pastaPadraoTxt": "(pasta padrão)",
-    "somenteLeitura": "Somente leitura. Para mudar, use o botão de escolher pasta"
+    "somenteLeitura": "Somente leitura. Para mudar, use o botão de escolher pasta",
+    "salvar": "Salvar configurações",
+    "salvarDica": "Salvar configurações"
   },
   "transmissao": {
     "oQueVaiAoAr": "O que vai ao ar",
     "presetDaCena": "Preset da cena '{nome}': vídeo {fonte}, alvo {alvo}, áudio {audio}",
-    "presetSemCena": "Preset: o da aba Gravação (sem cena ativa). Escolha uma cena na aba Cenas para controlar o que vai ao ar.",
+    "presetSemCena": "Sem cena: adicione uma na aba Cenas",
     "camIncluida": "câmera sobreposta incluída",
     "abrirCenas": "Escolher cena / preset",
     "abrirCenasDesc": "Abrir a aba Cenas para escolher o que vai ao ar",
@@ -328,7 +351,9 @@
     "aoVivoOk": "Ao vivo em {n} destino(s)",
     "transmissaoEncerrada": "Transmissão encerrada",
     "aoVivoPara": "Ao vivo para {n} destino(s)",
-    "parado": "Parado"
+    "parado": "Parado",
+    "escolherCena": "Escolher cena / preset",
+    "rtmpUrl": "URL RTMP"
   },
   "cenaFalas": {
     "aplicadaVivo": "Cena {n} ativada: {nome}. {resumo}",

@@ -200,8 +200,8 @@ class PainelConfiguracoes(wx.Panel):
         s.Add(linha_v, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         self.btn_salvar = a11y.botao(
-            self, lambda: "Salvar configurações", lambda e: self._salvar(),
-            lambda: "Salvar configurações")
+            self, lambda: t("config.salvar"), lambda e: self._salvar(),
+            lambda: t("config.salvarDica"))
         s.Add(self.btn_salvar, 0, wx.EXPAND | wx.ALL, 10)
 
         self.SetSizer(s)

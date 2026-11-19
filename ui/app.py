@@ -84,6 +84,8 @@ class Janela(wx.Frame):
         self.abas.AddPage(self.p_config, t("tabs.settings"))
 
         self.p_transmissao = PainelTransmissao(self.abas, self.speech, self.cfg)
+        self.p_transmissao.atualizar_cenas(
+            getattr(self.p_cenas, "cenas", []))
         self.p_transmissao.ligar_motor(
             self.motor,
             lambda: self.p_gravacao._sessao,
@@ -251,7 +253,7 @@ class Janela(wx.Frame):
         # também pede "1 a 0 em qualquer lugar". Solução: tecla nua SÓ
         # quando a janela tem foco (AcceleratorTable), Ctrl+N global
         # (RegisterHotKey). NÃO sequestra digitação, funciona fora do app.
-        MOD_NOREPEAT, MOD_CONTROL = 0x4000, 0x0002
+        MOD_NOREPEAT, MOD_CONTROL, MOD_ALT, MOD_SHIFT = 0x4000, 0x0002, 0x0001, 0x0004
         hwnd = self.GetHandle()
         for i in range(10):
             vk = 0x30 if i == 9 else (0x31 + i)     # '0' para a 10ª
@@ -268,6 +270,18 @@ class Janela(wx.Frame):
                                     wintypes.UINT(0x79)):
             self._hotkeys_ativos.append(self._hid_menu)
             _log.info("F10 global registrado: abre o menu da bandeja")
+
+        # ── Ctrl+Shift+H REABRE — GLOBAL ──
+        # BUG: estava como acelerador do wx, que só dispara com a JANELA
+        # FOCADA. Quando o app está na bandeja a janela está escondida —
+        # o atalho nunca dispara (relato do usuário). Global via
+        # RegisterHotKey, igual às cenas.
+        self._hid_reabrir = self._HOTKEY_CENA_BASE + 101
+        if self._u32.RegisterHotKey(hwnd, self._hid_reabrir,
+                                    MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT,
+                                    wintypes.UINT(ord("H"))):
+            self._hotkeys_ativos.append(self._hid_reabrir)
+            _log.info("Ctrl+Shift+H global registrado: reabre da bandeja")
 
         # ── bomba de WM_HOTKEY ──
         # O wx bombeia a fila dele, mas WM_HOTKEY não é despachado por
@@ -326,6 +340,10 @@ class Janela(wx.Frame):
                 _log.info("F10: abrindo o menu da bandeja")
                 wx.CallAfter(self._mostrar_menu_bandeja)
                 continue
+            if hid == getattr(self, "_hid_reabrir", -1):
+                _log.info("Ctrl+Shift+H: reabrindo da bandeja")
+                wx.CallAfter(self.reabrir_da_bandeja)
+                continue
             delta = hid - base
             # ids ímpares = Ctrl+N (cena delta//2)
             indice = delta // 2 if 0 <= delta < 20 else -1
@@ -369,6 +387,11 @@ class Janela(wx.Frame):
                 self.speech.falar(
                     t("cenas.erroAplicar").replace("{erro}", str(e)),
                     interrupt=True)
+        # o seletor da transmissão acompanha a cena ativa
+        try:
+            self.p_transmissao.atualizar_cenas(cenas, indice)
+        except Exception:
+            pass
 
     def _ao_destruir(self, ev) -> None:
         """Libera as hotkeys registradas — senão ficam presas no Windows."""
@@ -411,13 +434,8 @@ class Janela(wx.Frame):
         # MenuBar com o menu "Sistema" (Reabrir/GitHub/Sair) é o caminho
         # nativo do wx para o Alt funcionar — sem sequestrar a tecla.
         menu_sistema = wx.Menu()
-        menu_sistema.Append(self._ID_BANDEJA_RESTAURAR,
-                            t("tray.reopen") + "\tCtrl+Shift+R2")
-        menu_sistema.AppendSeparator()
-        # ── o formato de acelerador do wx nos rótulos: "texto\tALT+M" ──
-        # (wx.MenuItem: o acelerador vem após \t com ALT/CTRL/SHIFT). É a
-        # "configuração do wx" que o usuário viu no Aurora: o item carrega
-        # o atalho e o wx o registra na janela.
+        # SEM "Reabrir" aqui: o reabrir fica na bandeja (pedido do usuário —
+        # reabrir dentro da janela não faz sentido, a janela já está aberta)
         menu_sistema.Append(self._ID_BANDEJA_GITHUB,
                             t("tray.github") + "\tALT+G")
         menu_sistema.Append(self._ID_BANDEJA_SAIR, t("tray.quit"))

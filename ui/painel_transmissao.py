@@ -61,7 +61,7 @@ class PainelTransmissao(wx.Panel):
         caixa2.Add(linha1, 0, wx.EXPAND | wx.ALL, 8)
 
         linha2 = wx.BoxSizer(wx.HORIZONTAL)
-        linha2.Add(a11y.rotulo(self, lambda: "URL RTMP"), 0,
+        linha2.Add(a11y.rotulo(self, lambda: t("transmissao.rtmpUrl")), 0,
                    wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         self.campo_url = wx.TextCtrl(self, value="rtmp://")
         a11y.aplicar(self.campo_url, a11y.CampoAcessivel(self.campo_url,
@@ -101,21 +101,23 @@ class PainelTransmissao(wx.Panel):
         # de O QUE vai ao ar é o preset da cena — o mesmo seletor da aba
         # Cenas, aqui em modo resumo com atalho para editar. Duplicar os
         # controles faria os dois lugares divergirem.
-        caixa3 = wx.StaticBoxSizer(wx.VERTICAL, self, "O que vai ao ar")
+        caixa3 = wx.StaticBoxSizer(wx.VERTICAL, self, t("transmissao.oQueVaiAoAr"))
+        # SELETOR DE CENA DIRETO: as cenas cadastradas, aqui dentro. Escolhe
+        # e o preset já vale — sem sair da aba (pedido do usuário: "a mesma
+        # aba de gravações só que na transmissão também, sem modificar
+        # funções"). O seletor lê a MESMA lista da aba Cenas.
+        l_sel = wx.BoxSizer(wx.HORIZONTAL)
+        l_sel.Add(a11y.rotulo(self, lambda: t("cenas.colPreset")), 0,
+                  wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self.escolha_cena = wx.Choice(self, choices=["—"])
+        a11y.aplicar(self.escolha_cena, a11y.EscolhaAcessivel(
+            self.escolha_cena, t("transmissao.escolherCena")))
+        self.escolha_cena.Bind(wx.EVT_CHOICE, lambda e: self._cena_escolhida())
+        l_sel.Add(self.escolha_cena, 1)
+        caixa3.Add(l_sel, 0, wx.EXPAND | wx.ALL, 8)
         self.texto_fonte = a11y.rotulo(
             self, lambda: self._resumo_fonte())
-        caixa3.Add(self.texto_fonte, 0, wx.ALL, 8)
-        l_cena = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_abrir_cenas = a11y.botao(
-            self, lambda: "Escolher cena / preset",
-            lambda e: self._abrir_cenas(),
-            lambda: "Abrir a aba Cenas para escolher o que vai ao ar")
-        l_cena.Add(self.btn_abrir_cenas, 1, wx.RIGHT, 8)
-        self.chk_cam_sobre_tx = a11y.caixa(
-            self, lambda: "Incluir câmera sobreposta")
-        self.chk_cam_sobre_tx.SetValue(True)
-        l_cena.Add(self.chk_cam_sobre_tx, 1)
-        caixa3.Add(l_cena, 0, wx.EXPAND | wx.ALL, 8)
+        caixa3.Add(self.texto_fonte, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         sizer.Add(caixa3, 0, wx.EXPAND | wx.ALL, 10)
 
         # ── ao vivo ──
@@ -134,6 +136,24 @@ class PainelTransmissao(wx.Panel):
         self.SetSizer(sizer)
         self._recarregar_lista()
 
+    def atualizar_cenas(self, cenas: list[dict], ativa_idx: int = -1) -> None:
+        """Recria o seletor com as cenas cadastradas (chamado pela Janela
+        quando a aba Cenas muda)."""
+        self._cenas_lista = list(cenas)
+        rotulos = [f"{i + 1} — {c.get('nome', '')}" for i, c in enumerate(cenas)]
+        self.escolha_cena.Set(rotulos or ["—"])
+        if 0 <= ativa_idx < len(cenas):
+            self.escolha_cena.SetSelection(ativa_idx)
+
+    def _cena_escolhida(self) -> None:
+        i = self.escolha_cena.GetSelection()
+        cenas = getattr(self, "_cenas_lista", [])
+        if not (0 <= i < len(cenas)):
+            return
+        cb = getattr(self, "ao_escolher_cena", None)
+        if callable(cb):
+            cb(cenas[i])
+
     # ------------------------------------------------------------------ motor
     def ligar_motor(self, motor, sessao_provider, cenas_provider=None) -> None:
         """Recebe o motor, a sessão ativa e (opcional) a cena aplicada."""
@@ -142,8 +162,20 @@ class PainelTransmissao(wx.Panel):
         self._cenas_provider = cenas_provider or (lambda: None)
 
     def _resumo_fonte(self) -> str:
-        """O que está configurado para ir ao ar (da cena ativa)."""
-        cena = self._cenas_provider() if hasattr(self, "_cenas_provider") else None
+        """O que está configurado para ir ao ar (da cena escolhida)."""
+        i = self.escolha_cena.GetSelection()
+        cenas = getattr(self, "_cenas_lista", [])
+        if 0 <= i < len(cenas):
+            cena = cenas[i]
+            partes = [f"Vídeo: {cena.get('fonte', 'monitor')}"]
+            if cena.get("alvo"):
+                partes.append(f"alvo: {str(cena.get('alvo'))[:50]}")
+            partes.append(f"áudio: {cena.get('audio_label', 'mic + sistema')}")
+            if cena.get("cam_sobre"):
+                partes.append("câmera sobreposta incluída")
+            return "Preset da cena '" + str(cena.get("nome", "")) + "': " + \
+                ", ".join(partes)
+        return t("transmissao.presetSemCena")
         if cena:
             partes = [f"Vídeo: {cena.get('fonte', 'monitor')}"]
             if cena.get("alvo"):
@@ -152,24 +184,8 @@ class PainelTransmissao(wx.Panel):
             if cena.get("cam_sobre"):
                 partes.append("câmera sobreposta incluída")
             return "Preset da cena '" + str(cena.get("nome", "")) + "': " +                 ", ".join(partes)
-        return ("Preset: o da aba Gravação (sem cena ativa). "
-                "Escolha uma cena na aba Cenas para controlar o que vai ao ar.")
+        return t("transmissao.presetSemCena")
 
-    def _abrir_cenas(self) -> None:
-        """Leva o usuário à aba Cenas — é lá que o preset se edita."""
-        try:
-            livro = self.GetParent()
-            while livro is not None and not isinstance(livro, wx.Notebook):
-                livro = livro.GetParent()
-            if livro is not None:
-                for i in range(livro.GetPageCount()):
-                    if livro.GetPageText(i).lower().startswith("cen"):
-                        livro.SetSelection(i)
-                        self.speech.falar("Aba Cenas aberta", interrupt=True)
-                        return
-        except Exception:
-            pass
-        self.speech.falar("Não encontrei a aba Cenas", interrupt=True)
 
     # ------------------------------------------------------------------ lista
     def _anunciar_item(self) -> None:

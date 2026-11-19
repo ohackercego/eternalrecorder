@@ -102,7 +102,19 @@
     "recordingNow": "Recording",
     "statusMicMuted": "Microphone muted",
     "statusMicUnmuted": "Microphone unmuted",
-    "openFolderFailed": "Could not open the folder"
+    "openFolderFailed": "Could not open the folder",
+    "monitorPrincipal": " (primary)",
+    "padrao": " (default)",
+    "erro": "Error",
+    "alvoGravacao": "Recording target",
+    "atualizar": "Refresh",
+    "atualizarLista": "Refresh target list",
+    "mudo": "Mute",
+    "reativarMic": "Unmute microphone",
+    "silenciarMic": "Mute microphone",
+    "dispMicrofone": "Microphone device",
+    "sairDeVerdade": "Really quit",
+    "modoNormal": "Normal recording"
   },
   "scenes": {
     "hint": "장면을 클릭해 설정을 적용하세요. 녹화 중에는 클릭하여 라이브 전환합니다.",
@@ -259,7 +271,10 @@
     "resumoCam": "overlaid camera",
     "cenaNaoExiste": "Key {n}: there is no scene {n}. {total} scene(s) registered.",
     "ativaStatus": "Active scene: {n} — {nome}",
-    "nenhumaAtiva": "No active scene"
+    "nenhumaAtiva": "No active scene",
+    "btnNovaDica": "Add scene with the preset above",
+    "btnSalvarDica": "Save the preset to the selected scene",
+    "btnAtivarDica": "Activate the selected scene"
   },
   "bandeja": {
     "escondeu": "Eternal Recorder minimized to tray. Recording continues if active.",
@@ -292,7 +307,13 @@
     "pressioneAntes": "Press a combination before saving.",
     "precisaModificador": "Add Control, Alt or Shift",
     "removido": "Shortcut removed",
-    "definir": "Set…"
+    "definir": "Set…",
+    "limpar": "Clear",
+    "limparDica": "Clear shortcut",
+    "salvar": "Save",
+    "salvarDica": "Save shortcut",
+    "cancelar": "Cancel",
+    "cancelarDica": "Cancel and close without saving"
   },
   "config": {
     "pastaPadraoRestaurada": "Default folder restored",
@@ -307,12 +328,14 @@
     "pastaAtualEh": "Current folder is {pasta}. Click here to choose a new folder",
     "pastaAlterada": "Folder changed. Current folder is {pasta}",
     "pastaPadraoTxt": "(default folder)",
-    "somenteLeitura": "Read only. To change it, use the choose folder button"
+    "somenteLeitura": "Read only. To change it, use the choose folder button",
+    "salvar": "Save settings",
+    "salvarDica": "Save settings"
   },
   "transmissao": {
     "oQueVaiAoAr": "What goes live",
     "presetDaCena": "Scene '{nome}' preset: video {fonte}, target {alvo}, audio {audio}",
-    "presetSemCena": "Preset: the Recorder tab's (no active scene). Choose a scene in the Scenes tab to control what goes live.",
+    "presetSemCena": "No scene yet: add one in the Scenes tab",
     "camIncluida": "overlaid camera included",
     "abrirCenas": "Choose scene / preset",
     "abrirCenasDesc": "Open the Scenes tab to choose what goes live",
@@ -328,7 +351,9 @@
     "aoVivoOk": "Live on {n} destination(s)",
     "transmissaoEncerrada": "Streaming ended",
     "aoVivoPara": "Live to {n} destination(s)",
-    "parado": "Stopped"
+    "parado": "Stopped",
+    "escolherCena": "Choose scene / preset",
+    "rtmpUrl": "RTMP URL"
   },
   "cenaFalas": {
     "aplicadaVivo": "Scene {n} activated: {nome}. {resumo}",

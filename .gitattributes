@@ -1,0 +1,3 @@
+*.py linguist-language=Python
+*.md linguist-documentation
+ui/locales/*.json linguist-documentation

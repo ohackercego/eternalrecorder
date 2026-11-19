@@ -1,0 +1,26 @@
+# Eternal Recorder 2.1 — dependências de runtime
+#
+# O motor é o libobs (núcleo do OBS Studio) via pylibobs. Isso traz captura de
+# tela e janela por Windows Graphics Capture, áudio por processo (WASAPI),
+# câmera por DirectShow, composição de cenas e saída RTMP sem código nativo
+# próprio.
+#
+# ATENÇÃO À LICENÇA: pylibobs é GPL v2+ (herdada do libobs). Este projeto
+# distribui sob GPL v2+ por causa disso.
+
+# --- interface e acessibilidade
+wxPython>=4.2.1           # a janela; expõe IAccessible2 para NVDA/JAWS
+accessible-output2>=0.17  # fala por SAPI/NVDA/JAWS quando disponíveis
+
+# --- captura e composição (o motor)
+pylibobs>=33.0.0          # bindings do libobs: fontes, cenas, encoders, RTMP
+
+# --- áudio
+sounddevice>=0.4.6        # listar/enumerar microfones e saídas
+numpy>=1.24               # buffers de áudio
+
+# --- container
+av>=12.0                  # PyAV: remux/transcodificação no stop
+
+# Sem pywin32: a API do Windows é chamada por ctypes puro (monitores, janelas,
+# PID -> executável). Uma dependência menos para o ZIP carregar.

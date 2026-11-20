@@ -14,3 +14,7 @@ build_cxfreeze/
 _empacotar/
 python-embed/
 *.spec.bak
+
+# ── cache de build (empacotar.py baixa python-embed + wheels aqui) ──
+.cache-python/
+config.ini

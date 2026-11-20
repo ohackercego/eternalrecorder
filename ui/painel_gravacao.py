@@ -445,9 +445,16 @@ class PainelGravacao(wx.Panel):
     def _status_texto(self) -> str:
         if not self.gravando:
             return t("recorder.statusReady")
-        d = int(time.monotonic() - self._t0)
-        mm, ss = divmod(d, 60)
-        base = t("recorder.paused") if self.pausado else t("recorder.recordingNow")
+        # O cronômetro vem da SESSÃO, que desconta o tempo em pausa
+        # (`Sessao.decorrido`). Antes era `monotonic() - _t0` aqui mesmo: com a
+        # gravação parada na pausa, os segundos continuavam andando — o usuário
+        # relatou exatamente isso ("diz que está gravando e os segundos andam").
+        sessao = self._sessao
+        d = int(sessao.decorrido()) if sessao is not None else \
+            int(time.monotonic() - self._t0)
+        mm, ss = divmod(max(0, d), 60)
+        pausado = bool(sessao.pausado) if sessao is not None else self.pausado
+        base = t("recorder.paused") if pausado else t("recorder.recordingNow")
         mudo = " — microfone mudo" if self.mudo else ""
         extra = f" — {Path(self._saida).name}" if self._saida else ""
         return f"{base} {mm:02d}:{ss:02d}{mudo}{extra}"
@@ -717,11 +724,16 @@ class PainelGravacao(wx.Panel):
         self.texto_dica.SetLabel("Iniciando…")
         self.Layout()
         self._timer.Start(500)
-        tones.inicio()          # som ANTES da fala: o usuário ouve e entende
+        # ── ORDEM DO SOM (importa: o bipe sai pelo dispositivo que a captura
+        # grava). O tom toca JÁ (feedback imediato ao clique) e a thread
+        # espera ele terminar ANTES de abrir a captura — senão o próprio
+        # "iniciando" entra nos primeiros quadros do arquivo.
+        tones.inicio()
         self.speech.falar(t("recorder.statusRecordingStarted"), interrupt=True)
 
         def _iniciar():
             try:
+                tones.aguardar(1.0)
                 sessao = self.motor.iniciar(opcoes)
                 wx.CallAfter(self._ao_iniciado, sessao)
             except Exception as e:
@@ -859,28 +871,51 @@ class PainelGravacao(wx.Panel):
         self.speech.falar(f"Erro ao gravar. {erro}", interrupt=True)
 
     def _alternar_pausa(self) -> None:
+        """Alterna pausa/retomada olhando o estado REAL do output.
+
+        Antes o flag `self.pausado` era invertido ANTES de chamar o motor e
+        nunca era conferido depois: com `retomar()` quebrado (chamava
+        `pause()` sem argumento, que pausa), o botão virava "Pausar", o status
+        dizia "Gravando" e o arquivo ficava congelado — o relato do usuário.
+        Agora: lê o estado, age, e sincroniza o flag com o que o libobs
+        confirmou.
+        """
         if not self.gravando or self._sessao is None:
             return
-        self.pausado = not self.pausado
+        sessao = self._sessao
+        pausado_agora = bool(getattr(sessao, "pausado", self.pausado))
         try:
-            if self.pausado:
-                self.motor.pausar(self._sessao)
-                # som ANTES da fala: quem ouve o tom entende sem esperar a voz
-                tones.pausa()
-                self.speech.falar(t("recorder.statusRecordingPaused"),
-                                  interrupt=True)
+            if pausado_agora:
+                self.motor.retomar(sessao)
             else:
-                self.motor.retomar(self._sessao)
-                tones.retomada()
-                self.speech.falar(t("recorder.statusRecordingResumed"),
-                                  interrupt=True)
+                self.motor.pausar(sessao)
         except Exception as e:
+            _log.error("alternar_pausa falhou: %s: %s", type(e).__name__, e)
             self.speech.falar(f"Erro ao pausar: {e}", interrupt=True)
+            # não deixa a UI mentindo sobre o estado
+            self.pausado = bool(getattr(sessao, "pausado", self.pausado))
+            self._atualizar_botao_pausa()
+            self.texto_status.SetLabel(self._status_texto())
+            self.Layout()
             return
-        self.btn_pausar.SetLabel(
-            t("recorder.resume") if self.pausado else t("recorder.pause"))
+
+        self.pausado = bool(getattr(sessao, "pausado", not pausado_agora))
+        if self.pausado:
+            # output JÁ pausado: o tom de pausa não entra no arquivo
+            tones.pausa()
+            self.speech.falar(t("recorder.statusRecordingPaused"),
+                              interrupt=True)
+        else:
+            tones.retomada()
+            self.speech.falar(t("recorder.statusRecordingResumed"),
+                              interrupt=True)
+        self._atualizar_botao_pausa()
         self.texto_status.SetLabel(self._status_texto())
         self.Layout()
+
+    def _atualizar_botao_pausa(self) -> None:
+        self.btn_pausar.SetLabel(
+            t("recorder.resume") if self.pausado else t("recorder.pause"))
 
     def _alternar_mudo(self) -> None:
         if not self.gravando or self._sessao is None:
@@ -910,7 +945,8 @@ class PainelGravacao(wx.Panel):
         self._travar_opcoes(False)      # opções voltam a poder ser trocadas
         self.texto_status.SetLabel(t("recorder.statusReady"))
         self.Layout()
-        tones.fim()
+        # o tom de fim toca depois de a captura fechar (na thread _parar),
+        # senão ele entra nos últimos quadros do arquivo
         self.speech.falar(t("recorder.statusRecordingStopped"), interrupt=True)
 
         sessao, self._sessao = self._sessao, None
@@ -923,6 +959,7 @@ class PainelGravacao(wx.Panel):
                 res = self.motor.parar(sessao)
             except Exception as e:
                 res = {"erro": f"{type(e).__name__}: {e}"}
+            tones.fim()          # captura fechada: agora o bipe não contamina
             wx.CallAfter(self._ao_parado, res, caminho)
 
         threading.Thread(target=_parar, daemon=True,

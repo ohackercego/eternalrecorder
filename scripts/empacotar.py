@@ -33,7 +33,17 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 EMBED = RAIZ / "python-embed"
 DIST = RAIZ / "dist"
-VERSAO = "2.1.1"
+# a versão vem do arquivo VERSION — antes era hardcoded e o ZIP saía com o
+# número errado enquanto o app já era outro.
+def _ler_versao() -> str:
+    try:
+        v = (RAIZ / "VERSION").read_text(encoding="utf-8").strip()
+        return v or "0.0.0"
+    except Exception:
+        return "0.0.0"
+
+
+VERSAO = _ler_versao()
 NOME_ZIP = f"Eternal Recorder {VERSAO}.zip"
 
 # o que entra no ZIP

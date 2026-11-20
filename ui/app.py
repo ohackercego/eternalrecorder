@@ -53,7 +53,6 @@ class Janela(wx.Frame):
 
         self._montar_abas()
         self._montar_atalhos()
-        self._montar_hotkeys_cenas()
         self._montar_bandeja()
         # liga a cena ao painel de gravação — era o bug: o callback nunca era
         # registrado, então "ativar cena" só falava e não aplicava nada
@@ -81,6 +80,7 @@ class Janela(wx.Frame):
 
         self.p_config = PainelConfiguracoes(self.abas, self.speech, self.cfg)
         self.p_config.ao_mudar_idioma = self._ao_mudar_idioma
+        self.p_config.ao_mudar_atalhos = self._recarregar_atalhos
         self.abas.AddPage(self.p_config, t("tabs.settings"))
 
         self.p_transmissao = PainelTransmissao(self.abas, self.speech, self.cfg)
@@ -165,194 +165,120 @@ class Janela(wx.Frame):
 
     # ------------------------------------------------------------------ atalhos
     def _montar_atalhos(self) -> None:
-        """Atalhos nativos da janela, com as combinações do build Electron."""
-        ids = {k: wx.NewIdRef() for k in
-               ("gravar", "parar", "pausar", "mudo", "audio", "janela",
-                "reabrir")}
-        # ── TABELA ÚNICA ──
-        # Os aceleradores do app + as teclas 1..0 de cena, numa tabela só.
-        # (wx 4.3 não tem GetAccelerators; reconstruir de lista é o caminho.)
-        self._acel = [
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("R"), ids["gravar"]),
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("S"), ids["parar"]),
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("P"), ids["pausar"]),
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("M"), ids["mudo"]),
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("A"), ids["audio"]),
-            (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("H"), ids["janela"]),
-        ]
-        p = self.p_gravacao
-        self.Bind(wx.EVT_MENU, lambda e: self._agir(p.gravar), id=ids["gravar"])
-        self.Bind(wx.EVT_MENU, lambda e: self._agir(p.parar), id=ids["parar"])
-        self.Bind(wx.EVT_MENU, lambda e: self._agir(p._alternar_pausa),
-                  id=ids["pausar"])
-        self.Bind(wx.EVT_MENU, lambda e: self._agir(p._alternar_mudo),
-                  id=ids["mudo"])
-        self.Bind(wx.EVT_MENU,
-                  lambda e: p.chk_sistema.SetValue(not p.chk_sistema.GetValue()),
-                  id=ids["audio"])
-        self.Bind(wx.EVT_MENU,
-                  lambda e: self.abas.SetSelection(
-                      0 if self.abas.GetSelection() != 0 else 1),
-                  id=ids["janela"])
-        self.Bind(wx.EVT_MENU,
-                  lambda e: self.reabrir_da_bandeja(),
-                  id=ids["reabrir"])
+        """Atalhos: acelerador LOCAL (janela focada) + GLOBAL (fora do app).
 
-        # ── CENAS: teclas 1..0 com a janela FOCADA ──
-        # Acelerador local (não rouba digitação fora do app). Global é
-        # Ctrl+N (acima). Se não houver cena no índice, fala.
-        self._ids_cena = [wx.NewIdRef() for _ in range(10)]
-        for i, idc in enumerate(self._ids_cena):
+        O relato "atalhos não funcionam fora do app" tinha causa estrutural:
+        gravar/parar/pausar/mudo estavam **apenas** no `AcceleratorTable` do
+        wx, que só dispara com a janela focada. Como quem grava está sempre em
+        outro programa, esses atalhos nunca funcionaram fora do app — só as
+        cenas (Ctrl+1..0), o F10 e o Ctrl+Shift+H, que já usavam
+        `RegisterHotKey`.
+
+        Aqui ficam os dois caminhos:
+          - LOCAL (AcceleratorTable): teclas 1..0 NUAS e também as combinações,
+            para funcionar quando a janela tem foco (inclusive com o wx
+            segurando a tecla antes do sistema);
+          - GLOBAL (`ui.hotkeys`): TODAS as ações, via `RegisterHotKey`.
+        """
+        p = self.p_gravacao
+        self._acoes_atalho = {
+            "start": lambda: self._agir(p.gravar),
+            "stop": lambda: self._agir(p.parar),
+            "pause": lambda: self._agir(p._alternar_pausa),
+            "mute": lambda: self._agir(p._alternar_mudo),
+            "toggleAudio": lambda: p.chk_sistema.SetValue(
+                not p.chk_sistema.GetValue()),
+            "toggleWindow": lambda: self.abas.SetSelection(
+                0 if self.abas.GetSelection() != 0 else 1),
+            "menu": self._mostrar_menu_bandeja,
+            "reabrir": self.reabrir_da_bandeja,
+        }
+
+        # ── tabela de aceleradores da JANELA ──
+        # só as teclas de cena nuas: acelerador local não serve para ação de
+        # gravação (o usuário estaria em outro app). Os ids das ações vêm do
+        # próprio módulo de hotkeys para não haver duas numerações.
+        from ui.hotkeys import ACOES, _ID_CENA_BASE
+        self._ids_acao = {k: v for k, v in ACOES.items()}
+        self._acel = []
+        self._ids_cena = []
+        for i in range(10):
             vk = 0x30 if i == 9 else (0x31 + i)
+            idc = _ID_CENA_BASE + i
+            self._ids_cena.append(idc)
             self._acel.append((wx.ACCEL_NORMAL, vk, idc))
             self.Bind(wx.EVT_MENU,
                       lambda e, idx=i: self._ativar_cena_por_tecla(idx),
                       id=idc)
+        # as combinações globais também funcionam localmente: se o wx processar
+        # a tecla antes do sistema, o EVT_MENU cai no mesmo handler da ação
+        from ui.hotkeys import parse_atalho
+        for nome, funcao in self._acoes_atalho.items():
+            texto = (self.cfg.get("shortcuts") or {}).get(nome, "")
+            analisado = parse_atalho(texto) if texto else None
+            if not analisado:
+                continue
+            mods, vk = analisado
+            flags = 0
+            if mods & 0x0002:
+                flags |= wx.ACCEL_CTRL
+            if mods & 0x0004:
+                flags |= wx.ACCEL_SHIFT
+            if mods & 0x0001:
+                flags |= wx.ACCEL_ALT
+            hid = self._ids_acao[nome]
+            self._acel.append((flags, vk, hid))
+            self.Bind(wx.EVT_MENU, lambda e, f=funcao: f(), id=hid)
         self.SetAcceleratorTable(wx.AcceleratorTable(self._acel))
 
-    def _agir(self, acao) -> None:
-        """Leva o usuário à aba de gravação antes de agir por atalho."""
-        if self.abas.GetSelection() != 0:
-            self.abas.SetSelection(0)
-        acao()
-
-    # ------------------------------------------------- hotkeys globais de cena
-    # IDs do Windows para RegisterHotKey (0x0000-0xBFFF são livres p/ app)
-    _HOTKEY_CENA_BASE = 0xB000
-
-    def _montar_hotkeys_cenas(self) -> None:
-        """Teclas 1..9 e 0 ativam as cenas 1..10 GLOBALMENTE.
-
-        Por que RegisterHotKey e não AcceleratorTable: o acelerador do wx só
-        dispara com a JANELA FOCADA. Durante uma gravação o app está
-        minimizado ou em outra janela — o pedido do usuário é trocar de cena
-        com o teclado ENQUANTO grava. RegisterHotKey é do sistema: funciona
-        com o app em segundo plano, que é exatamente o caso de uso.
-
-        A tecla '0' ativa a 10ª cena: "0 é o 10 e 1 é 1 em diante" (pedido
-        literal). Não usa modificadores para continuar simples: uma tecla
-        por cena.
-        """
-        import ctypes
-        from ctypes import wintypes
-        self._u32 = ctypes.windll.user32
-        self._hotkeys_ativos: list[int] = []
-
-        #WM_HOTKEY
-        self._WM_HOTKEY = 0x0312
-        if not hasattr(self, "_old_proc"):
-            self._old_proc = None
-
-        # ── O QUE O USUÁRIO PEDIU (literal) ──
-        # "do 1 ao 0 troca dentro do app e fora do app ou em qualquer lugar
-        #  CTRL mais do 1 ao 0 troca a sena ao vivo na gravação"
-        #   1..0         -> troca de cena (tecla NUA, global)
-        #   Ctrl+1..0    -> troca AO VIVO (idem)
-        # A tecla nua sequestra a digitação de números no Windows inteiro —
-        # foi o bug que ele reportou antes. Ele RECLAMOU do sequestro, mas
-        # também pede "1 a 0 em qualquer lugar". Solução: tecla nua SÓ
-        # quando a janela tem foco (AcceleratorTable), Ctrl+N global
-        # (RegisterHotKey). NÃO sequestra digitação, funciona fora do app.
-        MOD_NOREPEAT, MOD_CONTROL, MOD_ALT, MOD_SHIFT = 0x4000, 0x0002, 0x0001, 0x0004
-        hwnd = self.GetHandle()
-        for i in range(10):
-            vk = 0x30 if i == 9 else (0x31 + i)     # '0' para a 10ª
-            hid_ctrl = self._HOTKEY_CENA_BASE + (2 * i) + 1
-            # Ctrl+N GLOBAL (fora do app, hwnd da janela — provado)
-            if self._u32.RegisterHotKey(hwnd, hid_ctrl,
-                                        MOD_NOREPEAT | MOD_CONTROL,
-                                        wintypes.UINT(vk)):
-                self._hotkeys_ativos.append(hid_ctrl)
-
-        # ── F10 abre o MENU da bandeja (GitHub + Sair) em qualquer lugar ──
-        self._hid_menu = self._HOTKEY_CENA_BASE + 100
-        if self._u32.RegisterHotKey(hwnd, self._hid_menu, MOD_NOREPEAT,
-                                    wintypes.UINT(0x79)):
-            self._hotkeys_ativos.append(self._hid_menu)
-            _log.info("F10 global registrado: abre o menu da bandeja")
-
-        # ── Ctrl+Shift+H REABRE — GLOBAL ──
-        # BUG: estava como acelerador do wx, que só dispara com a JANELA
-        # FOCADA. Quando o app está na bandeja a janela está escondida —
-        # o atalho nunca dispara (relato do usuário). Global via
-        # RegisterHotKey, igual às cenas.
-        self._hid_reabrir = self._HOTKEY_CENA_BASE + 101
-        if self._u32.RegisterHotKey(hwnd, self._hid_reabrir,
-                                    MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT,
-                                    wintypes.UINT(ord("H"))):
-            self._hotkeys_ativos.append(self._hid_reabrir)
-            _log.info("Ctrl+Shift+H global registrado: reabre da bandeja")
-
-        # ── bomba de WM_HOTKEY ──
-        # O wx bombeia a fila dele, mas WM_HOTKEY não é despachado por
-        # IsDialogMessage que o wx usa — precisa PeekMessage com a faixa
-        # exata. Timer de 50 ms: imperceptível e barato ( PeekMessage com
-        # filtro de mensagem não rouba as do wx).
-        self._timer_hotkey = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self._bombeia_hotkeys, self._timer_hotkey)
-        self._timer_hotkey.Start(50)
-
-        # WM_HOTKEY chega no WndProc da JANELA que registrou. O wxPython 4.3
-        # não expõe MSWWindowProc para override em Python, então uso o padrão
-        # de re-registrar as hotkeys para a janela com um DIALOGO DE MENSAGENS
-        # do Windows: RegisterHotKey aceita qualquer hwnd, e a mensagem
-        # WM_HOTKEY é postada NA FILA da thread da janela. Um wx.Timer de alta
-        # frequência não é preciso — em vez disso uso PeekMessage via ctypes
-        # num Timer de 60 ms, que filtra só WM_HOTKEY e não rouba as outras
-        # mensagens do wx (o wx tem o seu laço; PeekMessage com PM_REMOVE
-        # tiraria mensagens dele).
-        #
-        # CAMINHO ESCOLHIDO: WM_HOTKEY com hwnd=NULL vai para a FILA DA THREAD
-        # (não da janela). Como o MainLoop do wx bombeia a fila, uso
-        # wx.EVT_TIMER com 50 ms e PeekMessage(PM_NOREMOVE) apenas para
-        # DETECTAR e então consumir com GetMessage no handle do wx — o wx
-        # processa o resto normalmente.
+        self._montar_hotkeys_globais()
         self.Bind(wx.EVT_WINDOW_DESTROY, self._ao_destruir, self)
 
-    def _bombeia_hotkeys(self, ev=None) -> None:
-        """Drena WM_HOTKEY da fila e ativa a cena correspondente.
+    # ─────────────────────────────────────── atalhos GLOBAIS
+    def _montar_hotkeys_globais(self) -> None:
+        """Registra TODAS as ações via RegisterHotKey (funciona fora do app)."""
+        from ui.hotkeys import GerenciadorAtalhos
+        try:
+            self._hot = GerenciadorAtalhos(self)
+        except Exception as e:
+            _log.error("hotkeys: gerenciador não criou (%s: %s)",
+                       type(e).__name__, e)
+            self._hot = None
+            return
+        atalhos = dict(self.cfg.get("shortcuts") or {})
+        # F10 abre o menu da bandeja; combinação padrão se faltar no config
+        atalhos.setdefault("menu", "F10")
+        self._hot.registrar_acoes(atalhos, self._acoes_atalho)
+        self._hot.registrar_cenas(len(getattr(self.p_cenas, "cenas", [])) or 10,
+                                  self._ativar_cena_por_tecla)
+        _log.info("hotkeys globais: %s", self._hot.resumo())
+        # colisão = atalho que o usuário vai jurar que está quebrado; avisa
+        if self._hot.falhas:
+            wx.CallAfter(self.speech.falar,
+                         "Atenção: " + self._hot.resumo(), True)
 
-        PROVADO (prova_3form.py): registro com hwnd da janela + PeekMessage
-        com faixa WM_HOTKEY..WM_HOTKEY e PM_REMOVE pega o wParam certo —
-        mesmo com PeekMessage(None,...) porque a fila é da THREAD e o wx
-        bombeia essa mesma fila no MainLoop dele.
+    def _agir(self, acao) -> None:
+        """Leva o usuário à aba de gravação antes de agir por atalho.
 
-        PeekMessage com msgmin/msgmax = WM_HOTKEY só pega ESTA mensagem — as
-        demais continuam na fila para o wx processar.
+        É o mesmo comportamento do build Electron: o atalho funciona de
+        qualquer lugar, mas a UI mostra a aba onde a ação aconteceu.
         """
-        import ctypes
-        from ctypes import wintypes
-        u32 = ctypes.windll.user32
+        try:
+            if self.abas.GetSelection() != 0:
+                self.abas.SetSelection(0)
+        except Exception:
+            pass
+        acao()
 
-        class MSG_C(ctypes.Structure):
-            _fields_ = [("hwnd", wintypes.HWND), ("message", wintypes.UINT),
-                        ("wParam", wintypes.WPARAM), ("lParam", wintypes.LPARAM),
-                        ("time", wintypes.DWORD),
-                        ("pt", wintypes.POINT)]
-
-        msg = MSG_C()
-        WM_HOTKEY = self._WM_HOTKEY
-        base = self._HOTKEY_CENA_BASE
-        while u32.PeekMessageW(ctypes.byref(msg), None, WM_HOTKEY, WM_HOTKEY,
-                               0x0001):     # PM_REMOVE
-            hid = int(msg.wParam)
-            if hid == getattr(self, "_hid_menu", -1):
-                _log.info("F10: abrindo o menu da bandeja")
-                wx.CallAfter(self._mostrar_menu_bandeja)
-                continue
-            if hid == getattr(self, "_hid_reabrir", -1):
-                _log.info("Ctrl+Shift+H: reabrindo da bandeja")
-                wx.CallAfter(self.reabrir_da_bandeja)
-                continue
-            delta = hid - base
-            # ids ímpares = Ctrl+N (cena delta//2)
-            indice = delta // 2 if 0 <= delta < 20 else -1
-            if 0 <= indice < 10:
-                _log.info("WM_HOTKEY capturado: hid=%s -> cena %d",
-                          hid, indice + 1)
-                wx.CallAfter(self._ativar_cena_por_tecla, indice)
-            else:
-                _log.warning("WM_HOTKEY de outro registro: wParam=%s", hid)
+    def _recarregar_atalhos(self, atalhos: dict) -> None:
+        """Aplica combinações novas sem reiniciar o app."""
+        if getattr(self, "_hot", None) is None:
+            return
+        self._hot.recarregar(
+            dict(atalhos or {}), self._acoes_atalho,
+            total_cenas=len(getattr(self.p_cenas, "cenas", [])) or 10,
+            ao_cena=self._ativar_cena_por_tecla)
+        self.speech.falar(self._hot.resumo(), interrupt=True)
 
     def _ativar_cena_por_tecla(self, indice: int) -> None:
         _log.info("hotkey de cena %d (cadastradas: %d)",
@@ -399,16 +325,10 @@ class Janela(wx.Frame):
         ev.Skip()
 
     def _desregistrar_hotkeys(self) -> None:
-        """Desregistra as hotkeys globais. Sem isso as teclas continuam
-        capturadas mesmo com a janela fechada (o processo vivo na bandeja
-        segurava 1-0 no Windows inteiro — bug relatado)."""
-        import ctypes
-        for hid in getattr(self, "_hotkeys_ativos", []):
-            try:
-                ctypes.windll.user32.UnregisterHotKey(self.GetHandle(), hid)
-            except Exception:
-                pass
-        self._hotkeys_ativos = []
+        """Desregistra tudo. Sem isso as teclas continuam capturadas com o
+        processo vivo na bandeja — bug relatado."""
+        if getattr(self, "_hot", None) is not None:
+            self._hot.encerrar()
 
     # ------------------------------------------------------------------ bandeja
     _ID_BANDEJA_RESTAURAR = wx.NewIdRef()

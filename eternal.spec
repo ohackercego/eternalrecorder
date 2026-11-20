@@ -30,6 +30,8 @@ a = Analysis(
         "accessible_output2.outputs.nvda",
         "accessible_output2.outputs.sapi",
         "sounddevice",
+        "numpy",
+        "_sounddevice_data",
         "av",
         "wx",
         "wx.adv",

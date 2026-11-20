@@ -2,7 +2,7 @@
 
 A **fully screen-reader accessible** (NVDA, JAWS) screen, window and camera recorder for Windows, built in pure Python with libobs.
 
-**Version 2.2.2** · Windows 10/11 · GPL v2 · [Baixar em português](#português)
+**Version 2.3.0** · Windows 10/11 · GPL v2 · [Baixar em português](#português)
 
 ## Downloads
 
@@ -15,7 +15,7 @@ No installer, no Python, no Node required.
 
 ## Highlights
 
-- **Live scene switching**: press **1–9 and 0** (with the app window focused) to switch scenes instantly — video **and** audio change in the same recording file
+- **Live scene switching**: press **1–9 and 0** (with the app window focused) or **Ctrl+1–0 from anywhere** to switch scenes instantly — video **and** audio change in the same recording file
 - **Window audio**: records the audio of the chosen application only, not the whole system
 - **Optional audio gain**: by default follows the Windows mixer volume
 - **Camera overlay**: picture-in-picture webcam in any corner and size
@@ -29,14 +29,24 @@ No installer, no Python, no Node required.
 | Key | Where | Action |
 |---|---|---|
 | **1–9, 0** | app window focused | switch to scene 1–10 (0 = scene 10) |
-| `Ctrl+Shift+R` | global | record / stop |
+| `Ctrl+Shift+R` | global | record |
 | `Ctrl+Shift+S` | global | stop |
+| `Ctrl+1` … `Ctrl+0` | global | switch to scene 1–10 (0 = scene 10) |
 | `Ctrl+Shift+P` | global | pause / resume |
 | `Ctrl+Shift+M` | global | mute microphone |
 | `Ctrl+Shift+A` | global | toggle system audio |
 | `Ctrl+Shift+H` | global | reopen from tray |
 | `Alt+S` | app window focused | System menu (GitHub, Quit) |
 | `F10` | global | tray menu (GitHub, Quit) |
+
+## Audio feedback
+
+Short beeps mark start, pause, resume and stop, so you know the state without
+looking at the screen. They are synthesized to a low volume and scheduled so
+they never land inside the recording: the start tone finishes **before** capture
+opens, the pause tone plays **after** the output is paused, and the stop tone
+plays **after** the MP4 is closed. If sound is unavailable, the app says so in
+the log (`er.ui.tones`) instead of failing silently.
 
 ## Feature guide
 

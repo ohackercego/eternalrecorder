@@ -1,5 +1,87 @@
 # Changelog
 
+## 2.3.0 — pausa de verdade, atalhos globais e bipes audíveis
+
+Três bugs relatados pelo usuário testando o app. Todos reproduzidos antes de
+corrigir e validados com execução real depois.
+
+### Corrigido
+
+- **Pausar gravava o "parar ligado".** `pylibobs.Output.pause()` tem assinatura
+  `pause(paused: bool = True)`: chamar `pause()` **sem argumento pausa**. O
+  `retomar()` do motor fazia exatamente isso, então clicar em continuar pausava
+  de novo. Resultado medido no fluxo real:
+
+  ```
+  PAUSAR  -> out.paused=True   active=True
+  RETOMAR -> out.paused=True   active=True    <- nunca despausava
+  t=9s    frames=62 (parado desde a pausa)
+  ```
+
+  Como o flag da UI era invertido antes da chamada e nunca conferido, o botão
+  voltava a dizer "Pausar", o status dizia "Gravando" e os segundos continuavam
+  andando com o arquivo congelado. Agora `pause(True)` / `pause(False)`
+  explícitos, com confirmação por `saida.paused`: se o libobs não confirmar, a
+  UI não mente.
+
+- **Cronômetro andava durante a pausa.** O painel fazia `monotonic() - _t0`,
+  que ignora pausa. A sessão agora guarda `tempo_pausado` e `pausa_desde`, e
+  `Sessao.decorrido()` devolve o tempo GRAVADO. Prova: ~10,8 s de tempo real com
+  ~4 s de pausa geraram arquivo de **6,73 s** — a pausa não entrou no vídeo.
+
+- **Atalhos não funcionavam fora do app.** Gravar, parar, pausar e mudo
+  existiam **só** como `AcceleratorTable` do wx, que dispara apenas com a janela
+  focada — e quem grava está sempre em outro programa. Só as cenas (Ctrl+1..0),
+  o F10 e o Ctrl+Shift+H usavam `RegisterHotKey`, o que explica o relato "alguns
+  atalhos funcionam, os do app não". Novo módulo `ui/hotkeys.py` registra
+  **todas** as ações globalmente, com `MOD_NOREPEAT`, combinações lidas do
+  `config.ini`, colisão (erro 1409) logada e falada, e desregistro ao sair.
+
+  O drenador antigo de `WM_HOTKEY` usava `PeekMessage(PM_REMOVE)` num `wx.Timer`
+  e **engolia o evento antes de o wx vê-lo** — comprovado em bancada comparando
+  os três caminhos. O registrador agora usa `EVT_HOTKEY`, que entrega o evento
+  inclusive com outra janela em foco (medido).
+
+- **Atalho trocado na aba Configurações só valia no próximo boot.** Agora
+  `_recarregar_atalhos()` desregistra e registra na hora, e fala quantos estão
+  ativos.
+
+- **Nenhum som tocava em nenhum evento.** Duas causas somadas, e a segunda não
+  estava documentada em lugar nenhum:
+  1. `ui/tones.py` estava **no-op de propósito** (`ATIVO = False`, todas as
+     funções `pass`) — resquício de quando o usuário pediu "pare TODO tipo de
+     beeps". Nenhuma chamada podia soar.
+  2. **`winsound` não existe no Python embarcado do app** (`python-embed` é
+     build mínima, sem `_winsound`). Qualquer implementação com
+     `import winsound` falhava dentro de um `except: pass` — silêncio absoluto,
+     sem erro e sem log.
+
+  Reescrito com síntese em `numpy` + `sounddevice` (presente no runtime),
+  senoide com envelope de 5 ms, volume baixo, e fallback `winmm.PlaySoundW` via
+  `ctypes`. Prova de que sai som de verdade: capturei o dispositivo padrão pelo
+  `wasapi_output_capture` do próprio libobs e medi o pico por FFT — **660 Hz** na
+  janela em que o tom tocou. "Não deu exceção" não é prova de áudio.
+
+### Ordem dos tons
+
+O tom sai pelo mesmo dispositivo que a captura grava, então a ordem por evento
+foi ajustada para não contaminar o arquivo:
+
+- **iniciar**: toca, espera o tom terminar, só então abre a captura
+- **pausar**: pausa o output primeiro, toca depois
+- **retomar**: toca, espera, então despausa
+- **parar**: fecha o muxer, toca depois
+
+Medido: os quatro tons tocaram e **nenhum** pico das frequências usadas
+(660/880/520/360/700/470 Hz) apareceu no áudio do arquivo gravado.
+
+### Empacotamento
+
+- `scripts/empacotar.py` lia uma versão hardcoded (`2.1.1`) e gerava ZIP com o
+  número errado; agora lê o arquivo `VERSION`.
+- `eternal.spec`: `numpy` e `_sounddevice_data` como hiddenimports — sem eles os
+  bipes morreriam no executável.
+
 ## 2.1.1 — quatro bugs do painel
 
 Todos relatados pelo usuário testando o app, todos encontrados medindo.

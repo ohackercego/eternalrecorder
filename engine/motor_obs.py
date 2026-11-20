@@ -117,9 +117,23 @@ class Sessao:
     itens_video: list = field(default_factory=list)
     # fontes de ÁUDIO vivas — a troca de cena ao vivo aplica mute/unmute nelas
     fontes_vivas: list = field(default_factory=list)
+    # tempo TOTAL já passado em pausa (segundos). O cronômetro da UI desconta
+    # isto — antes ele fazia monotonic() - inicio e os segundos continuavam
+    # andando com a gravação parada.
+    tempo_pausado: float = 0.0
+    # instante (monotonic) em que a pausa ATUAL começou; 0 = não pausado
+    pausa_desde: float = 0.0
 
     def decorrido(self) -> float:
-        return time.monotonic() - self.inicio if self.inicio else 0.0
+        """Tempo GRAVADO (sem contar pausas).
+
+        Pausado, devolve o tempo congelado no instante da pausa; rodando,
+        devolve o tempo real menos tudo o que já ficou em pausa.
+        """
+        if not self.inicio:
+            return 0.0
+        agora = self.pausa_desde if self.pausa_desde else time.monotonic()
+        return max(0.0, agora - self.inicio - self.tempo_pausado)
 
     @property
     def trilhas_audio(self) -> int:
@@ -1186,19 +1200,51 @@ class Motor:
 
     # ----------------------------------------------------------- controle
     def pausar(self, sessao: Sessao) -> None:
+        """Pausa o output de verdade.
+
+        `Output.pause()` do pylibobs tem assinatura `pause(paused: bool = True)`
+        — chamar sem argumento PAUSA. Era isso que fazia o "retomar" continuar
+        pausado. Aqui o estado é explícito nos dois sentidos.
+
+        Só marco `sessao.pausado` se o libobs confirmar (`out.paused`); antes o
+        flag ia para True mesmo quando a chamada não pegava, e a UI dizia
+        "pausado" com a gravação correndo.
+        """
+        _log = logger("motor")
         try:
-            sessao.saida.pause()
-            sessao.pausado = True
-        except Exception:
-            pass
+            sessao.saida.pause(True)
+        except Exception as e:
+            _log.error("pausar falhou: %s: %s", type(e).__name__, e)
+            raise
+        confirmado = bool(getattr(sessao.saida, "paused", True))
+        sessao.pausado = confirmado
+        if confirmado:
+            sessao.pausa_desde = time.monotonic()
+            _log.info("pausar: output pausado (frame %d)",
+                      self.obter_frames(sessao))
+        else:
+            _log.error("pausar: libobs NÃO confirmou a pausa (out.paused=False)")
 
     def retomar(self, sessao: Sessao) -> None:
+        """Despausa o output. `pause(False)` — NÃO `pause()`, que pausa."""
+        _log = logger("motor")
         try:
-            # o output do libobs não tem "resume": pausa é toggle
-            sessao.saida.pause()
-            sessao.pausado = False
-        except Exception:
-            pass
+            # o output do libobs não tem "resume": pausa é toggle booleano
+            sessao.saida.pause(False)
+        except Exception as e:
+            _log.error("retomar falhou: %s: %s", type(e).__name__, e)
+            raise
+        if bool(getattr(sessao.saida, "paused", False)):
+            _log.error("retomar: libobs continuou pausado depois de pause(False)")
+            sessao.pausado = True
+            return
+        # fecha a conta da pausa que acabou
+        if sessao.pausa_desde:
+            sessao.tempo_pausado += time.monotonic() - sessao.pausa_desde
+            sessao.pausa_desde = 0.0
+        sessao.pausado = False
+        _log.info("retomar: output ativo de novo (tempo pausado acumulado %.1fs)",
+                  sessao.tempo_pausado)
 
     def mudo(self, sessao: Sessao, alvo: str, mudo: bool) -> None:
         """Silencia uma fonte de áudio sem tocar no vídeo."""

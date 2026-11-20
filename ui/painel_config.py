@@ -44,6 +44,7 @@ class PainelConfiguracoes(wx.Panel):
         self._atalhos: dict[str, str] = dict(config.get("shortcuts") or {})
         self._botoes_atalho: dict[str, wx.Button] = {}
         self.ao_mudar_idioma = None
+        self.ao_mudar_atalhos = None
 
         s = wx.BoxSizer(wx.VERTICAL)
 
@@ -253,6 +254,18 @@ class PainelConfiguracoes(wx.Panel):
         self.Layout()
         self.speech.falar(f"Atalho {rotulo}: {novo or 'removido'}",
                           interrupt=True)
+        # aplica NA HORA no Windows: sem isso a combinação nova só valeria no
+        # próximo boot, e o usuário conclui que "o atalho não funciona".
+        cb = getattr(self, "ao_mudar_atalhos", None)
+        if callable(cb):
+            try:
+                self.cfg["shortcuts"] = dict(self._atalhos)
+                from engine.config import salvar
+                salvar(self.cfg)
+                cb(dict(self._atalhos))
+            except Exception as e:
+                self.speech.falar(f"Erro ao aplicar atalho: {e}",
+                                  interrupt=True)
 
     # ------------------------------------------------------------------ idioma
     def _mudar_idioma(self) -> None:

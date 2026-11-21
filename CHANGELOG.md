@@ -1,5 +1,55 @@
 # Changelog
 
+## 2.3.1 — taxa de áudio, tarefas de UI e o .exe no release
+
+Três problemas, todos vindos de um log real de gravação.
+
+### Corrigido
+
+- **Áudio gravado a 44100 Hz com o dispositivo em 48000.** O log do libobs
+  mostrava a contradição na mesma sessão:
+
+  ```
+  info: audio settings reset:  samples per sec: 44100    <- errado
+  info: WASAPI: Device 'Fones...' [48000 Hz] initialized <- o real
+  ```
+
+  Causa: `_taxa_audio_nativa()` chamava
+  `sounddevice.query_devices(kind='output')`, que devolve o padrão do host de
+  MAIOR prioridade do PortAudio — no Windows, o **MME**, que reporta 44100. O
+  libobs não usa MME: as fontes `wasapi_*` abrem pelo **WASAPI**, a 48000. O
+  contexto era configurado em 44100 com o aparelho entregando 48000, e o libobs
+  reamostrava todo bloco (a voz "fininha, cortando e repetindo" de antes).
+
+  Agora a taxa é lida do dispositivo **dentro do host WASAPI**. Medido depois:
+  log diz `taxa de áudio: 48000 Hz (do host WASAPI; MME dizia 44100)` e o
+  arquivo final tem `sample_rate=48000`, áudio 6.720 s contra vídeo 6.7167 s.
+
+- **`error: UI task could not be queued, there's no UI task handler!` (×6 por
+  gravação).** O libobs agenda `obs_queue_task(OBS_TASK_UI, ...)` quando uma
+  fonte difere a destruição do recurso de GPU; sem handler registrado a tarefa é
+  **descartada**, o destroy nunca roda e o recurso vaza — um erro por fonte, no
+  fim de cada gravação. O `Motor` agora registra o handler em
+  `_instalar_handler_de_ui()`, antes de criar qualquer fonte. Ele executa a
+  tarefa na hora (este host não tem laço de UI do libobs) e o objeto do callback
+  fica vivo em `self`, senão o cffi coleta e o libobs chama ponteiro morto.
+  Medido: 0 ocorrências do erro no fluxo completo.
+
+### O release agora SEMPRE leva o .exe do cx_Freeze
+
+Pedido: "o release tem que ter sempre o .exe via cx_freeze". Antes o ZIP só
+tinha o runtime embarcado + `.vbs`, o que obriga quem baixa a ter Python.
+
+- `setup_cxfreeze.py` lê a versão do arquivo `VERSION` (estava hardcoded em
+  `2.1.2`, então o exe saía com número errado) e inclui os 25 `ui/locales/*.json`
+  como `include_files` — sem eles o exe abria com a chave crua na tela.
+- `scripts/empacotar.py` copia `dist_cxfreeze/` para dentro do ZIP como
+  `Eternal Recorder (exe)/` e **falha de propósito** se o exe não existir, em vez
+  de gerar um release sem ele.
+
+Testado: o exe abre com o título traduzido
+(`Eternal Recorder — 1 monitor(es), 3 janela(s)`), não com `app.name`.
+
 ## 2.3.0 — pausa de verdade, atalhos globais e bipes audíveis
 
 Três bugs relatados pelo usuário testando o app. Todos reproduzidos antes de

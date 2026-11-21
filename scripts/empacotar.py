@@ -58,7 +58,13 @@ INCLUIR = [
     "docs",
     "VERSION",
 ]
-EXCLUIR_PADROES = ("__pycache__", "*.pyc", ".git", ".venv", "dist", "teste*")
+EXCLUIR_PADROES = ("__pycache__", "*.pyc", ".git", ".venv", "dist", "teste*",
+                   ".venv-cx")
+
+# A pasta do cx_Freeze que vai junto no ZIP. PEDIDO DO USUÁRIO: "o release tem
+# que ter SEMPRE o .exe via cx_freeze" — o ZIP sem o exe obriga quem baixa a ter
+# Python instalado, e foi exatamente a reclamação.
+PASTA_CX = "dist_cxfreeze"
 
 PY_URL = ("https://www.python.org/ftp/python/{v}/"
           "python-{v}-embed-amd64.zip")
@@ -150,6 +156,23 @@ def main() -> int:
     # o runtime vai junto
     log("copiando runtime Python")
     shutil.copytree(EMBED, tmp / "python-embed", dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+    # ── o .exe do cx_Freeze (obrigatório no release) ──
+    # Sem isto quem baixa precisa de Python instalado. A pasta tem que ser
+    # gerada ANTES por: python setup_cxfreeze.py build_exe --build-exe dist_cxfreeze
+    pasta_cx = RAIZ / PASTA_CX
+    exe_cx = pasta_cx / "Eternal Recorder.exe"
+    if not exe_cx.exists():
+        raise SystemExit(
+            "FALTA o .exe do cx_Freeze em " + str(exe_cx) + "\n"
+            "  gere antes:  python setup_cxfreeze.py build_exe "
+            "--build-exe dist_cxfreeze\n"
+            "  (o release NÃO pode sair sem ele)")
+    log(f"copiando cx_Freeze: {PASTA_CX} "
+        f"({sum(1 for _ in pasta_cx.rglob('*') if _.is_file())} arquivos)")
+    shutil.copytree(pasta_cx, tmp / "Eternal Recorder (exe)",
+                    dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
     # ── lançador ──

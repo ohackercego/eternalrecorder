@@ -169,11 +169,63 @@ class Motor:
         self._carregar()
 
     # ------------------------------------------------------------------ setup
+    def _instalar_handler_de_ui(self) -> None:
+        """Registra o handler de tarefas de UI do libobs.
+
+        BUG que isto corrige (log do usuário, 2.3.0):
+
+            error: UI task could not be queued, there's no UI task handler!  (x6)
+
+        O libobs agenda `obs_queue_task(OBS_TASK_UI, ...)` quando uma fonte
+        difere a destruição do recurso de GPU para a thread de UI — e, sem
+        handler registrado, a tarefa é **descartada**: o destroy nunca roda, o
+        recurso vaza e o erro aparece uma vez por fonte no fim de cada gravação.
+
+        Este host não tem laço de UI do libobs (quem tem é o frontend Qt do
+        OBS), então o handler executa a tarefa na hora. O objeto do callback
+        precisa ficar vivo em `self` — se o cffi coletar o handler, o libobs
+        chama um ponteiro morto e o processo cai.
+        """
+        try:
+            from pylibobs import _ffi
+            ffi = _ffi.ffi
+            lib = _ffi.get_lib()
+        except Exception as e:
+            logger("motor").warning("UI task handler: pylibobs indisponível "
+                                    "(%s: %s)", type(e).__name__, e)
+            return
+        if getattr(self, "_ui_task_handler", None) is not None:
+            return
+        contador = {"executadas": 0, "descartadas": 0}
+
+        @ffi.callback("void(void(*)(void *), void *, _Bool)")
+        def _handler(task, param, wait):
+            if task == ffi.NULL:
+                contador["descartadas"] += 1
+                return
+            try:
+                task(param)
+                contador["executadas"] += 1
+            except Exception:
+                contador["descartadas"] += 1
+
+        self._ui_task_handler = _handler        # mantém o cffi vivo
+        self._ui_task_stats = contador
+        try:
+            lib.obs_set_ui_task_handler(_handler)
+            logger("motor").info("UI task handler registrado")
+        except Exception as e:
+            logger("motor").warning("UI task handler: não registrou "
+                                    "(%s: %s)", type(e).__name__, e)
+
     def _carregar(self) -> None:
         try:
             from pylibobs import OBSContext
             self._ctx = OBSContext()
             self._ctx.__enter__()
+            # ANTES de qualquer fonte: sem handler, todo destroy diferido é
+            # descartado e o log enche de "UI task could not be queued"
+            self._instalar_handler_de_ui()
             self._ctx.set_video(width=1920, height=1080, fps_num=30)
             # ── TAXA DE ÁUDIO: 48000, NÃO o padrão 44100 ──
             # `set_audio()` sem argumento usa 44100, mas os dispositivos WASAPI
@@ -544,29 +596,90 @@ class Motor:
         return item
 
     def _taxa_audio_nativa(self) -> int:
-        """Taxa que o dispositivo de áudio realmente entrega.
+        """Taxa que o dispositivo de áudio realmente entrega AO LIBOBS.
 
-        MEDIDO: nesta máquina o dispositivo roda a 44100 Hz e o contexto era
-        forçado a 48000. O libobs reamostrava, e a reamostragem acumulava
-        erro: com um sinal de 1 bipe por segundo, a gravação saía com 11 bipes
-        em 12 s e intervalos de 0,39 s a 3,06 s — a voz "fininha, cortando e
-        repetindo" relatada pelo usuário.
+        MEDIDO nesta máquina (2026-11-21, log do app):
 
-        Casar a taxa elimina a reamostragem: o que o dispositivo entrega é
-        exatamente o que o encoder grava.
+            sounddevice  query_devices(kind='output') -> 44100   (host MME)
+            mesmo dispositivo no host WASAPI          -> 48000
+
+        `query_devices(kind=...)` devolve o dispositivo padrão do host de MAIOR
+        prioridade do PortAudio, que no Windows é o **MME** — e o MME reporta
+        44100. O libobs NÃO usa MME: as fontes `wasapi_output_capture` e
+        `wasapi_input_capture` abrem o dispositivo pelo **WASAPI**, a 48000. O
+        código antigo lia a taxa do MME e configurava o contexto em 44100 com o
+        dispositivo entregando 48000 — o libobs reamostrava cada bloco e o
+        buffer acumulava (voz "fininha, cortando e repetindo").
+
+        A prova está no próprio log do libobs, na mesma sessão:
+
+            info: audio settings reset:  samples per sec: 44100   <- errado
+            info: WASAPI: Device 'Fones...' [48000 Hz] initialized  <- real
+
+        Correção: procurar o dispositivo pelo NOME dentro do host WASAPI e usar
+        a taxa DELE. Só cai no palpite (48000) se o WASAPI não estiver listado.
         """
         try:
             import sounddevice as sd
-            if self._usar_mic():
-                info = sd.query_devices(kind="input")
-            else:
-                info = sd.query_devices(kind="output")
-            taxa = int(info.get("default_samplerate") or 0)
+
+            quer_entrada = self._usar_mic()
+            hosts = list(sd.query_hostapis())
+            aparelhos = list(sd.query_devices())
+
+            def _taxa_wasapi() -> int:
+                # 1. tenta o host WASAPI e o dispositivo padrão DELE
+                for i, h in enumerate(hosts):
+                    if "wasapi" not in str(h.get("name", "")).lower():
+                        continue
+                    chave = ("default_input_device" if quer_entrada
+                             else "default_output_device")
+                    alvo = h.get(chave, -1)
+                    if isinstance(alvo, int) and 0 <= alvo < len(aparelhos):
+                        taxa = int(aparelhos[alvo].get("default_samplerate") or 0)
+                        if taxa:
+                            return taxa
+                # 2. o padrão do host apontou para índice inválido (-1): procura
+                #    pelo NOME do dispositivo padrão do sistema dentro do WASAPI
+                try:
+                    nome_padrao = str(
+                        sd.query_devices(kind="input" if quer_entrada
+                                         else "output").get("name", ""))
+                except Exception:
+                    nome_padrao = ""
+                canal = "max_input_channels" if quer_entrada else "max_output_channels"
+                for i, d in enumerate(aparelhos):
+                    if not d.get(canal):
+                        continue
+                    ha = hosts[d["hostapi"]].get("name", "") if d.get("hostapi") is not None else ""
+                    if "wasapi" not in str(ha).lower():
+                        continue
+                    if nome_padrao and str(d.get("name", "")) == nome_padrao:
+                        taxa = int(d.get("default_samplerate") or 0)
+                        if taxa:
+                            return taxa
+                return 0
+
+            taxa = _taxa_wasapi()
             if taxa in (44100, 48000, 88200, 96000, 176400, 192000):
+                logger("motor").info(
+                    "taxa de áudio: %d Hz (do host WASAPI; MME dizia %s)",
+                    taxa, self._taxa_mme(quer_entrada))
                 return taxa
-        except Exception:
-            pass
+        except Exception as e:
+            logger("motor").warning("taxa de áudio: não deu para consultar "
+                                    "(%s: %s)", type(e).__name__, e)
+        # O libobs abre tudo por WASAPI no Windows; 48000 é a taxa nativa dele.
         return 48000
+
+    @staticmethod
+    def _taxa_mme(entrada: bool) -> str:
+        """Só para o log: o que o host MME reporta (a fonte do bug)."""
+        try:
+            import sounddevice as sd
+            return int(sd.query_devices(kind="input" if entrada
+                                        else "output").get("default_samplerate"))
+        except Exception:
+            return "?"
 
     def _usar_mic(self) -> bool:
         o = getattr(self, "_opcoes_ativas", None)

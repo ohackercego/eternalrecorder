@@ -2,13 +2,17 @@
 
 A **fully screen-reader accessible** (NVDA, JAWS) screen, window and camera recorder for Windows, built in pure Python with libobs.
 
-**Version 2.3.1** · Windows 10/11 · GPL v2 · [Baixar em português](#português)
+**Version 2.4.0** · Windows 10/11 · GPL v2 · [Baixar em português](#português)
 
 ## Downloads
 
 Get the latest version from the [Releases page](https://github.com/ohackercego/eternalrecorder/releases/latest):
 
-- **Eternal Recorder (zip)** — extract and run either `Eternal Recorder (exe)\Eternal Recorder.exe` (self-contained, no Python needed) or `Eternal Recorder.vbs` (embedded Python runtime). **A `.exe` built with cx_Freeze ships in every release.**
+- **Eternal Recorder (zip)** — extract and pick one:
+  - `Eternal Recorder (portatil).exe` — **single file**, 90 MB. Nothing to unpack first; best for a USB stick or sending to someone.
+  - `Eternal Recorder (portatil)\Eternal Recorder.exe` — **folder** build, 229 MB. Opens instantly (no unpacking); best for daily use on the same PC.
+
+  Both are built with **PyInstaller** and need no Python installed. (2.3.1 shipped a cx_Freeze exe that failed on launch with `No module named 're'` — see the changelog.)
 - **Eternal Recorder (single executable)** — one standalone `.exe` (experimental)
 
 No installer, no Python, no Node required.
@@ -107,7 +111,7 @@ Packaging:
 # single executable (PyInstaller)
 pyinstaller eternal.spec
 
-# portable folder (cx_Freeze)
+# portable folder (PyInstaller)
 python setup_cxfreeze.py build_exe
 ```
 

@@ -61,10 +61,18 @@ INCLUIR = [
 EXCLUIR_PADROES = ("__pycache__", "*.pyc", ".git", ".venv", "dist", "teste*",
                    ".venv-cx")
 
-# A pasta do cx_Freeze que vai junto no ZIP. PEDIDO DO USUÁRIO: "o release tem
-# que ter SEMPRE o .exe via cx_freeze" — o ZIP sem o exe obriga quem baixa a ter
-# Python instalado, e foi exatamente a reclamação.
-PASTA_CX = "dist_cxfreeze"
+# A pasta do PyInstaller que vai junto no ZIP. PEDIDO DO USUÁRIO: o release tem
+# que trazer executáveis prontos — ZIP sem .exe obriga quem baixa a ter Python.
+#
+# MUDANÇA 2.4.0: era cx_Freeze. O exe do cx_Freeze saía quebrado com
+#   "cx_Freeze: Python error in main script (traceback unavailable)
+#    Exception: No module named 're'"
+# porque o `library.zip` era gerado com 184 entradas e ZERO módulos da stdlib
+# (nem re, nem json, nem traceback, nem encodings). O PyInstaller embute a
+# stdlib no bootstrap, então esse modo de falha não existe.
+PASTA_PYI = "dist_pyi"
+PASTA_PYI_FOLDER = "Eternal Recorder"          # onedir
+EXE_PYI_UNICO = "Eternal Recorder (portatil).exe"  # onefile
 
 PY_URL = ("https://www.python.org/ftp/python/{v}/"
           "python-{v}-embed-amd64.zip")
@@ -158,22 +166,33 @@ def main() -> int:
     shutil.copytree(EMBED, tmp / "python-embed", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
-    # ── o .exe do cx_Freeze (obrigatório no release) ──
-    # Sem isto quem baixa precisa de Python instalado. A pasta tem que ser
-    # gerada ANTES por: python setup_cxfreeze.py build_exe --build-exe dist_cxfreeze
-    pasta_cx = RAIZ / PASTA_CX
-    exe_cx = pasta_cx / "Eternal Recorder.exe"
-    if not exe_cx.exists():
+    # ── os executáveis do PyInstaller (obrigatórios no release) ──
+    # Sem eles quem baixa precisa de Python instalado. A pasta tem que ser
+    # gerada ANTES por:
+    #   python -m PyInstaller eternal_recorder.spec --noconfirm \
+    #       --distpath dist_pyi --workpath build_pyi
+    pasta_pyi = RAIZ / PASTA_PYI
+    exe_pasta = pasta_pyi / PASTA_PYI_FOLDER / "Eternal Recorder.exe"
+    exe_unico = pasta_pyi / EXE_PYI_UNICO
+    faltando = [str(p) for p in (exe_pasta, exe_unico) if not p.exists()]
+    if faltando:
         raise SystemExit(
-            "FALTA o .exe do cx_Freeze em " + str(exe_cx) + "\n"
-            "  gere antes:  python setup_cxfreeze.py build_exe "
-            "--build-exe dist_cxfreeze\n"
-            "  (o release NÃO pode sair sem ele)")
-    log(f"copiando cx_Freeze: {PASTA_CX} "
-        f"({sum(1 for _ in pasta_cx.rglob('*') if _.is_file())} arquivos)")
-    shutil.copytree(pasta_cx, tmp / "Eternal Recorder (exe)",
+            "FALTAM os executáveis do PyInstaller:\n  "
+            + "\n  ".join(faltando) + "\n"
+            "  gere antes:  python -m PyInstaller eternal_recorder.spec "
+            "--noconfirm --distpath dist_pyi --workpath build_pyi\n"
+            "  (o release NÃO pode sair sem eles)")
+
+    # pasta portátil (onedir) — abre rápido, sem descompactar
+    log(f"copiando onedir: {PASTA_PYI}/{PASTA_PYI_FOLDER}")
+    shutil.copytree(pasta_pyi / PASTA_PYI_FOLDER,
+                    tmp / "Eternal Recorder (portatil)",
                     dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+    # executável único (onefile) — um arquivo para pendrive
+    log(f"copiando onefile: {EXE_PYI_UNICO}")
+    shutil.copy2(exe_unico, tmp / EXE_PYI_UNICO)
 
     # ── lançador ──
     # O Python embeddable NÃO traz pythonw.exe (só python.exe) — um .bat que

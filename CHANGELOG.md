@@ -1,5 +1,63 @@
 # Changelog
 
+## 2.4.0 — o executável que realmente abre (PyInstaller), portátil e único
+
+O exe da 2.3.1 **não abria**. Ao clicar:
+
+```
+cx_Freeze: Python error in main script (traceback unavailable)
+Cannot import traceback module.
+Exception: No module named 're'
+Original Exception: No module named 're'
+```
+
+### Causa medida
+
+O `dist_cxfreeze/lib/library.zip` saía com **184 entradas e nenhum módulo da
+biblioteca padrão** — nem `re`, nem `json`, nem `traceback`, nem `encodings`.
+Só pacotes de terceiros (`av`, `cffi`, `more_itertools`, `wx`, ...). O
+interpretador embutido não tinha como importar `re`, então até o handler de
+erro do cx_Freeze morreu — daí "traceback unavailable".
+
+Não era falta de dependência nem caminho errado: o freezer simplesmente não
+coletou a stdlib.
+
+### Corrigido
+
+- **Empacotamento migrado de cx_Freeze para PyInstaller 6.22.3.** O PyInstaller
+  traz a stdlib no próprio bootstrap, então esse modo de falha não existe.
+- **Dois formatos, como pedido:**
+  - `Eternal Recorder (portatil).exe` — **arquivo único**, 90 MB. Para pendrive
+    ou enviar por mensagem. Abre ~2 s mais devagar por extrair em `%TEMP%`.
+  - `Eternal Recorder (portatil)\Eternal Recorder.exe` — **pasta** (onedir),
+    229 MB. Abre na hora, sem extrair. É a mais rápida no uso diário.
+- **O que o spec agora coleta de verdade:**
+  - 81 MB de DLLs do libobs/ffmpeg (`pylibobs/_libs/windows/x86_64`, 27 DLLs)
+  - 25 locales em `ui/locales` (sem eles a UI mostra `app.name` cru)
+  - PortAudio do `sounddevice` (sem ela os bipes de `ui/tones.py` morrem mudos)
+  - 17 hiddenimports para módulos carregados por nome
+- **`scripts/empacotar.py`** agora falha de propósito se qualquer um dos dois
+  executáveis não existir, e coloca os dois no ZIP.
+
+### Medido depois
+
+Ambos abrem sem erro:
+
+```
+17 atalho(s) global(is) ativo(s)
+ícone da bandeja: instalado=True
+Traceback / No module: 0 ocorrências
+```
+
+O `Eternal Recorder 2.4.0.zip` (292 MB, 5.561 entradas) contém os dois formatos
+e o runtime Python para quem quiser rodar pelo `launcher.py`.
+
+### Nota de ambiente
+
+O Python 3.12 do sistema tinha um `pathlib` de terceiros que deixava o
+PyInstaller instalar mas não executar ("pip uninstall pathlib"). O build usa um
+venv limpo (`.venv-pyinstaller`, criado com `uv`) — por isso ele saiu.
+
 ## 2.3.1 — taxa de áudio, tarefas de UI e o .exe no release
 
 Três problemas, todos vindos de um log real de gravação.

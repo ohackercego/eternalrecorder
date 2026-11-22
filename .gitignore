@@ -18,3 +18,6 @@ python-embed/
 # ── cache de build (empacotar.py baixa python-embed + wheels aqui) ──
 .cache-python/
 config.ini
+dist_pyi/
+build_pyi/
+.venv-pyinstaller/

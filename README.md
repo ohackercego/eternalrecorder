@@ -101,19 +101,45 @@ The app logs everything to `%LOCALAPPDATA%\EternalRecorder\logs` (one file per d
 Requires Python 3.12+:
 
 ```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 python launcher.py
 ```
 
-Packaging:
+### Packaging (PyInstaller)
+
+The spec builds **both** formats in one run — the folder build and the single file:
 
 ```bash
-# single executable (PyInstaller)
-pyinstaller eternal.spec
-
-# portable folder (PyInstaller)
-python setup_cxfreeze.py build_exe
+pip install pyinstaller
+python -m PyInstaller eternal_recorder.spec --noconfirm \
+    --distpath dist_pyi --workpath build_pyi
 ```
+
+That writes:
+
+| Output | What it is | Size |
+|---|---|---|
+| `dist_pyi/Eternal Recorder/` | folder build (onedir) — opens instantly, no unpacking | ~229 MB |
+| `dist_pyi/Eternal Recorder (portatil).exe` | single file (onefile) — for a USB stick | ~90 MB |
+
+Neither needs Python installed on the target machine.
+
+Then the release ZIP:
+
+```bash
+python scripts/empacotar.py --sem-deps
+```
+
+`empacotar.py` **refuses to build** if either executable is missing, and puts both
+in the ZIP. It no longer uses cx_Freeze: that build produced an exe that died on
+launch with `No module named 're'` because its `library.zip` shipped without the
+Python standard library (see the changelog for 2.4.0).
+
+> If `pyinstaller` installs but will not run, your Python may have a third-party
+> `pathlib` shadowing the standard one (`pip uninstall pathlib`). A clean venv
+> avoids it.
 
 ## Portuguese (original)
 

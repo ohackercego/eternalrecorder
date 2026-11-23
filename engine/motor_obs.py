@@ -480,6 +480,12 @@ class Motor:
                 alvo = self._janela_id(int(desc["hwnd"]))
             if alvo:
                 settings["window"] = alvo
+                # LOG DO ID: sem isto, uma captura preta nao diz se o id foi
+                # montado errado ou se o plugin nao achou a janela. O log do
+                # libobs mostra `executable`/`class` mas NAO mostra o titulo
+                # que mandamos (ele reformata), entao a unica prova de que o
+                # id saiu completo e' esta linha.
+                logger("motor").info("window id enviado: %r", alvo)
             # `method` 2 = WGC (Windows Graphics Capture). MEDIDO: WGC captura
             # a janela mesmo quando ela esta' coberta por outra ou sem foco.
             # BitBlt (1) devolve PRETO nesses casos e com janelas aceleradas
@@ -699,22 +705,72 @@ class Motor:
 
     @staticmethod
     def janela_minimizada(hwnd: int) -> bool:
-        """A janela esta' minimizada? (gravar assim sai PRETO em qualquer metodo)
+        """A janela esta' indisponivel para captura? (gravar assim sai PRETO)
 
         MEDIDO com o Posty (Chrome) no mesmo harness:
             primeiro plano   YAVG=70.7  ok
             atras de outra   YAVG=70.7  ok
             MINIMIZADA       YAVG=16.0  PRETO
 
-        O WGC entrega um quadro preto para janela minimizada — nao e' bug do
-        nosso codigo, e' como o Windows composita. Serve para AVISAR o usuario
-        antes de gravar, em vez de entregar um arquivo preto sem explicacao.
+        E, mais importante, o caso que nao e' minimizacao: o Windows
+        COMPOSITA janelas fora da tela atual e as marca como "cloaked" no
+        DWM. Elas continuam `IsWindowVisible=True` e `IsIconic=False`, mas o
+        WGC recebe um quadro PRETO.
+
+        Medido nas janelas do Chrome desta maquina:
+            hwnd=6293044  cloaked=2  <- "Nova guia", captura PRETA
+            hwnd=4260142  cloaked=0  <- "Posty",     captura ok
+
+        DWMWA_CLOAKED = 14. Valores: 0 = visivel; 1 = cloaked pelo app (outro
+        desktop virtual); 2 = cloaked pelo sistema (fora do monitor atual ou
+        janela "fantasma" do Chrome).
         """
         try:
             import ctypes
-            return bool(ctypes.windll.user32.IsIconic(int(hwnd)))
+            from ctypes import wintypes
+            u = ctypes.windll.user32
+            h = int(hwnd)
+            if u.IsIconic(h):
+                return True
+            dwm = ctypes.windll.dwmapi
+            cloaked = ctypes.c_int(0)
+            hr = dwm.DwmGetWindowAttribute(
+                wintypes.HWND(h), 14, ctypes.byref(cloaked),
+                ctypes.sizeof(cloaked))
+            # 0x00000000 = S_OK. Se falhar, nao afirmamos nada.
+            if hr == 0 and cloaked.value != 0:
+                return True
+            # janela "nao visivel" tambem sai preta
+            if not u.IsWindowVisible(h):
+                return True
+            return False
         except Exception:
             return False
+
+    @staticmethod
+    def motivo_preto(hwnd: int) -> str:
+        """Texto do aviso quando a janela vai gravar preta (vazio se ok)."""
+        try:
+            import ctypes
+            u = ctypes.windll.user32
+            dwm = ctypes.windll.dwmapi
+            h = int(hwnd)
+            if u.IsIconic(h):
+                return ("A janela está minimizada — a gravação vai sair preta. "
+                        "Restaure a janela antes de gravar.")
+            cloaked = ctypes.c_int(0)
+            hr = dwm.DwmGetWindowAttribute(h, 14, ctypes.byref(cloaked), 4)
+            if hr == 0 and cloaked.value != 0:
+                return ("Esta janela não está sendo desenhada pelo Windows "
+                        "(fora do monitor atual ou em outro desktop) — a "
+                        "gravação vai sair preta. Traga a janela para a tela "
+                        "antes de gravar.")
+            if not u.IsWindowVisible(h):
+                return ("A janela está oculta — a gravação vai sair preta. "
+                        "Mostre a janela antes de gravar.")
+            return ""
+        except Exception:
+            return ""
 
     def _resolucao_nativa(self, o: Opcoes) -> tuple[int, int]:
         """Resolução do alvo quando o usuário escolhe "fonte"."""
@@ -1056,12 +1112,13 @@ class Motor:
         fontes = self._fontes_do_modo(o)
         if not fontes:
             raise RuntimeError("nenhuma fonte para o modo escolhido")
-        # AVISO DE JANELA MINIMIZADA: gravar assim sai PRETO (medido: YAVG=16
-        # com WGC, o metodo correto). O libobs nao reclama — o arquivo so' fica
-        # preto — entao o aviso tem que sair daqui, antes de gravar.
-        if o.modo == "janela" and o.janela_hwnd and self.janela_minimizada(o.janela_hwnd):
-            sessao.aviso = ("A janela está minimizada — a gravação vai sair "
-                            "preta. Restaure a janela antes de gravar.")
+        # AVISO DE JANELA QUE VAI SAIR PRETA: minimizada, cloaked pelo DWM ou
+        # oculta. O libobs nao reclama — o arquivo so' fica preto — entao o
+        # aviso tem que sair daqui, antes de gravar.
+        if o.modo == "janela" and o.janela_hwnd:
+            motivo = self.motivo_preto(o.janela_hwnd)
+            if motivo:
+                sessao.aviso = motivo
         cena = self.criar_cena(f"sessao-{int(time.time())}", fontes)
         sessao.cena = cena
         sessao.fontes = fontes

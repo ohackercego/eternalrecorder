@@ -300,7 +300,9 @@
     "janelaCenaSumiu": "The scene's window is no longer open. Reopen the program and update the scene.",
     "modoCenaAtivado": "Scene mode enabled. Pick a scene in the Scenes tab.",
     "modoCenaDesativado": "Scene mode disabled. Recording uses the source and audio chosen here.",
-    "travadaAviso": "Source and audio options are locked while recording. Stop the recording to change them."
+    "travadaAviso": "Source and audio options are locked while recording. Stop the recording to change them.",
+    "janelaRestaurada": "Het venster was geminimaliseerd en is achter uw andere vensters hersteld om te worden opgenomen.",
+    "janelaSemFoco": "Vensteropname werkt terwijl u andere apps gebruikt — het venster hoeft geen focus te hebben."
   },
   "atalho": {
     "teclaNaoSuportada": "Unsupported key",

@@ -300,7 +300,9 @@
     "janelaCenaSumiu": "A janela da cena não está mais aberta. Reabra o programa e atualize a cena.",
     "modoCenaAtivado": "Modo cena ativado. Escolha uma cena na aba Cenas.",
     "modoCenaDesativado": "Modo cena desativado. A gravação usa a fonte e o áudio escolhidos aqui.",
-    "travadaAviso": "As opções de fonte e áudio ficam travadas durante a gravação. Pare a gravação para mudar."
+    "travadaAviso": "As opções de fonte e áudio ficam travadas durante a gravação. Pare a gravação para mudar.",
+    "janelaRestaurada": "A janela estava minimizada e foi restaurada atrás das suas outras janelas para ser gravada.",
+    "janelaSemFoco": "A captura de janela funciona enquanto você usa outros programas — a janela não precisa estar em foco."
   },
   "atalho": {
     "teclaNaoSuportada": "Tecla não suportada",

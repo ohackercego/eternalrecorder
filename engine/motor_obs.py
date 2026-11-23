@@ -106,6 +106,10 @@ class Sessao:
     objetos: list = field(default_factory=list)
     erro: Optional[str] = None
     aviso: Optional[str] = None
+    # Chave de traducao para o aviso (ex: "gravacao.janelaRestaurada"). A UI
+    # resolve com t() no idioma do usuario; `aviso` continua para mensagens
+    # que ja' vem prontas do sistema (sem traducao possivel).
+    aviso_chave: Optional[str] = None
     frames: int = 0
     rtmp_urls: list = field(default_factory=list)
     pausado: bool = False
@@ -1180,19 +1184,31 @@ class Motor:
         except Exception as e:
             print(f"[motor] resolução {w}x{h}: {e}")
 
-        # ── JANELA: DESCLOAKAR ANTES DE CAPTURAR ──
-        # Se a janela esta' cloaked pelo DWM (fora do monitor atual, outro
-        # desktop virtual, "fantasma" de navegador) o WGC entrega quadro
-        # PRETO. Traze-la para a tela resolve. Medido: cloaked=2 -> preto;
-        # apos ShowWindow+SetForegroundWindow cloaked=0 -> YAVG=156 (imagem).
+        # ── JANELA: DEIXA CAPTURAVEL SEM ROUBAR O FOCO ──
+        # Se a janela estava minimizada/cloaked, `descloakar` a restaura no
+        # FUNDO do z-order (SW_SHOWNOACTIVATE + HWND_BOTTOM): o DWM volta a
+        # desenha-la e a captura funciona, sem tirar o usuario da janela em
+        # que ele esta' trabalhando.
+        #
+        # O AVISO e' necessario porque a janela APARECE atras das outras: sem
+        # explicacao o usuario acha que o app mexeu na tela dele sem motivo.
+        # `janela_restaurada` vai como chave de traducao para a UI falar no
+        # idioma escolhido (25 idiomas em ui/locales).
         if o.modo == "janela" and o.janela_hwnd:
+            precisa = self.motivo_preto(o.janela_hwnd)
             if self.descloakar(o.janela_hwnd):
-                logger("motor").info("janela %s descloakada antes de gravar",
-                                     int(o.janela_hwnd))
+                if precisa:
+                    # so' avisa se MEXEU (minimizada/cloaked); janela normal
+                    # nao gera aviso nenhum
+                    sessao.aviso_chave = "gravacao.janelaRestaurada"
+                    logger("motor").info(
+                        "janela %s restaurada no fundo para captura (nao "
+                        "roubou o foco)", int(o.janela_hwnd))
             else:
                 logger("motor").warning(
-                    "janela %s continua cloaked/minimizada — a gravacao vai "
-                    "sair preta", int(o.janela_hwnd))
+                    "janela %s continua indisponivel para captura — a "
+                    "gravacao vai sair preta", int(o.janela_hwnd))
+                sessao.aviso = self.motivo_preto(o.janela_hwnd)
         # ── cena conforme o modo ──
         fontes = self._fontes_do_modo(o)
         if not fontes:

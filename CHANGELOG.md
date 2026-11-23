@@ -1,5 +1,94 @@
 # Changelog
 
+## 2.5.0 — captura de janela que funciona (e sem roubar o foco)
+
+O modo **janela** gravava **tela preta** em qualquer janela. Foi o bug mais
+difícil deste projeto, porque três causas diferentes se somavam e cada uma
+escondia a outra.
+
+### O que estava acontecendo (medido, não deduzido)
+
+**1. O `hwnd` era de outra janela.** A UI montava a lista de janelas em
+`CarregarAlvos()` e, na hora de gravar, chamava `motor.janelas()` **de novo** e
+usava o mesmo **índice**. O Chrome abre e fecha janelas o tempo todo, então a
+lista voltava em outra ordem e o índice apontava para outra janela.
+
+Prova no log do próprio app — a fonte de vídeo subia **sem título**, a de áudio
+(que recebe o identificador pronto) subia com título:
+
+```
+[window-capture: 'Janela'] update settings:
+	executable: chrome.exe
+	class:      Chrome_WidgetWin_1        <- SEM title
+
+[win-wasapi: 'Áudio app'] update settings:
+	executable: chrome.exe
+	title: Posty Automations - Google Chrome   <- COM title
+```
+
+**2. Janela minimizada ou "cloaked" não é desenhada pelo Windows.** O DWM marca
+como *cloaked* a janela que não está sendo composta (minimizada, fora do
+monitor atual, outro desktop virtual). Enquanto cloaked, o Windows Graphics
+Capture entrega **quadro preto** e o libobs não reclama.
+
+YAVG do arquivo (16 = preto, 234 = imagem), mesma janela-alvo:
+
+| estado | YAVG |
+|---|---|
+| minimizada | **16,0** (preto) |
+| cloaked=2 | **16,0** (preto) |
+| normal | **234,2** (imagem) |
+
+**3. O setting do cursor tinha o nome errado.** O `win-capture` usa `cursor`;
+o código mandava `capture_cursor`, que é de outras fontes e aqui é ignorado.
+
+### Corrigido
+
+- **O `hwnd` vem do cache da lista**, não de uma chamada nova. O índice que o
+  usuário escolheu sempre se refere à lista que ele viu.
+- **A janela é restaurada no fundo do z-order** antes de capturar
+  (`SW_SHOWNOACTIVATE` + `SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE)`). Ela volta
+  a ser desenhada pelo DWM — que é o que a captura precisa — **sem virar a
+  janela ativa**. Esta é a técnica usada pelas bibliotecas de 2026 (layershot,
+  OmniSight) para ver janelas em segundo plano.
+
+  Medido, com o Bloco de Notas minimizado e o WhatsApp em foco:
+
+  ```
+  foco ANTES:   WhatsApp
+  foco DEPOIS:  WhatsApp      <- não roubou
+  arquivo:      YAVG=234,4    <- imagem
+  foco FINAL:   WhatsApp      <- intacto
+  ```
+
+- **Aviso traduzido** quando a janela precisou ser restaurada: ela aparece
+  atrás das outras, e sem explicação parece que o app mexeu na tela sem
+  motivo. São duas chaves novas em `gravacao`:
+  `janelaRestaurada` e `janelaSemFoco` — **nos 25 idiomas**.
+- **`method` 2 (WGC) fixo**: o `Automatic` cai em BitBlt em vários casos e
+  devolve preto em janela acelerada por GPU.
+- **Setting `cursor`** com o nome que o plugin realmente lê.
+
+### O que continua impossível
+
+Janela **"fantasma" de navegador** (o Chrome cria janelas que não existem em
+lugar nenhum — nem minimizadas, nem em outro monitor). `cloaked=2` antes, volta
+a `2` depois de restaurada. Não há o que capturar, e o app avisa em vez de
+entregar um arquivo preto sem explicação.
+
+### Como foi validado
+
+Sempre com o Python 3.14 do `python-embed` (o mesmo que o app usa), medindo o
+**YAVG do arquivo gerado** — não a impressão de que funcionou:
+
+```
+janela normal            YAVG=234,6   ok
+janela minimizada        YAVG=234,4   ok (restaurada no fundo)
+janela cloaked           YAVG=16,0    aviso correto
+monitor                  YAVG=234,0   ok (sem regressão)
+execução pelo app real   YAVG=55,9    ok (após os 3 frames de aquecimento)
+```
+
 ## 2.4.0 — o executável que realmente abre (PyInstaller), portátil e único
 
 O exe da 2.3.1 **não abria**. Ao clicar:

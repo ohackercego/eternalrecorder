@@ -891,7 +891,16 @@ class PainelGravacao(wx.Panel):
             self._ao_falhou(sessao.erro)
             return
         self._travar_opcoes(True)
+        # AVISO TRADUZIDO: o motor devolve `aviso_chave` (ex:
+        # "gravacao.janelaRestaurada") quando a janela precisou ser restaurada
+        # no fundo para a captura funcionar. A traducao acontece aqui, no
+        # idioma escolhido — o motor nao conhece i18n.
         aviso = getattr(sessao, "aviso", None)
+        chave = getattr(sessao, "aviso_chave", None)
+        if chave:
+            aviso = t(chave)
+        if not aviso:
+            aviso = t("gravacao.janelaSemFoco")
         self.texto_dica.SetLabel(
             aviso or f"Gravando — {sessao.trilhas_audio} trilha(s) de áudio")
         self.Layout()

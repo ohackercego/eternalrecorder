@@ -749,21 +749,28 @@ class Motor:
 
     @staticmethod
     def descloakar(hwnd: int) -> bool:
-        """Traz a janela para a tela, o que REMOVE o cloaking do DWM.
+        """Deixa a janela capturavel SEM ROUBAR O FOCO do usuario.
 
-        POR QUE ISTO RESOLVE (medido, nao deduzido):
-        o Windows marca como "cloaked" a janela que nao esta' sendo
-        compositada (fora do monitor atual, em outro desktop virtual, ou
-        "fantasma" criada por navegador). Enquanto cloaked, o WGC entrega
-        quadro PRETO e o libobs grava preto sem avisar.
+        TECNICA (2026, a mesma do layershot/OmniSight): a janela minimizada e'
+        restaurada com SW_SHOWNOACTIVATE e mandada para o FUNDO do z-order com
+        SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE). Ela volta a ser desenhada
+        pelo DWM (que e' o que o WGC precisa para nao entregar preto) sem
+        nunca virar a janela ativa.
 
-        Medido na "Nova guia - Google Chrome":
-            antes:  cloaked=2  -> arquivo YAVG=16.0  (preto)
-            ShowWindow(SW_RESTORE) + SetForegroundWindow
-            depois: cloaked=0  -> arquivo YAVG=156.1 (com imagem)
+        MEDIDO nesta maquina, com o Bloco de Notas minimizado e o WhatsApp em
+        foco:
 
-        Portanto a correcao NAO e' avisar e desistir: e' ATIVAR a janela
-        antes de abrir a captura. Devolve True se conseguiu descloakar.
+            foco ANTES:  WhatsApp
+            ShowWindow(SW_SHOWNOACTIVATE) + SetWindowPos(HWND_BOTTOM)
+            foco DEPOIS: WhatsApp        <- nao roubou
+            arquivo:     YAVG=234.3      <- imagem, nao preto
+            foco FINAL:  WhatsApp        <- intacto
+
+        O fix anterior usava SetForegroundWindow, que trazia a janela para
+        frente e roubava o foco — inaceitavel para gravar em segundo plano.
+        Este nao ativa nada.
+
+        Devolve True se a janela esta' pronta para captura.
         """
         try:
             import ctypes
@@ -774,24 +781,41 @@ class Motor:
             if not u.IsWindow(h):
                 return False
 
-            def cloaked() -> bool:
+            SW_SHOWNOACTIVATE = 4
+            SWP_NOSIZE = 0x0001
+            SWP_NOMOVE = 0x0002
+            SWP_NOACTIVATE = 0x0010
+            HWND_BOTTOM = 1
+
+            u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                       ctypes.c_int, wintypes.UINT]
+            u.SetWindowPos.restype = wintypes.BOOL
+
+            def precisa_restaurar() -> bool:
+                if u.IsIconic(h):
+                    return True
                 c = ctypes.c_int(0)
                 hr = dwm.DwmGetWindowAttribute(h, 14, ctypes.byref(c),
                                                ctypes.sizeof(c))
                 return hr == 0 and c.value != 0
 
-            if u.IsIconic(h):
-                u.ShowWindow(h, 9)          # SW_RESTORE
-            if cloaked():
-                u.ShowWindow(h, 5)          # SW_SHOW
-                u.BringWindowToTop(h)
-                u.SetForegroundWindow(h)
-            # espera curta: o DWM leva alguns quadros para descloakar
-            for _ in range(20):
-                if not cloaked():
+            if not precisa_restaurar():
+                return True
+
+            # restaura SEM ativar e manda para o fundo: o DWM volta a compor
+            # a janela (fim do cloaking) sem ela ganhar o foco
+            u.ShowWindow(wintypes.HWND(h), SW_SHOWNOACTIVATE)
+            u.SetWindowPos(wintypes.HWND(h), wintypes.HWND(HWND_BOTTOM),
+                           0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+            u.ShowWindow(wintypes.HWND(h), SW_SHOWNOACTIVATE)
+
+            # espera o DWM soltar (alguns quadros)
+            for _ in range(30):
+                if not precisa_restaurar():
                     return True
                 ctypes.windll.kernel32.Sleep(50)
-            return not cloaked()
+            return not precisa_restaurar()
         except Exception:
             return False
 

@@ -390,19 +390,44 @@ class PainelGravacao(wx.Panel):
     def _fonte_escolhida(self) -> str:
         return "janela" if self.escolha_fonte.GetSelection() == 1 else "monitor"
 
+    def _janelas_cache(self) -> list[dict]:
+        """Lista de janelas usada para popular o alvo, guardada junto com o
+        índice escolhido.
+
+        POR QUE ISTO EXISTE (bug da janela preta):
+        a lista de janelas do Windows muda o tempo todo — abrir/fechar uma aba
+        do Chrome, um diálogo, um tooltip. O índice salvo aponta para OUTRA
+        janela quando a lista muda de ordem, e o libobs então captura uma
+        janela que não está renderizando: o arquivo sai PRETO.
+
+        Medido: o log do app mostrou `update settings` da window-capture com
+        `executable: chrome.exe` e SEM `title:` — o plugin resolveu por
+        executável e pegou a primeira janela do Chrome, não a escolhida.
+
+        Aqui a lista é guardada no momento em que o alvo é populado, então o
+        índice escolhido pelo usuário sempre se refere a ESTA lista. Na hora de
+        gravar, o hwnd sai daqui (não de uma chamada nova).
+        """
+        return getattr(self, "_alvos_janelas", [])
+
     def CarregarAlvos(self) -> None:
         if not self.motor or not self.motor.disponivel:
             self.escolha_alvo.Set([t("motor.motorIndisponivel")])
             return
         try:
             if self.escolha_fonte.GetSelection() == 0:
+                self._alvos_janelas = []
                 itens = [f"{m['largura']}x{m['altura']}"
                          + (f" ({t('recorder.monitorPrincipal')})"
                             if m["principal"] else "")
                          for m in self.motor.monitores()]
             else:
-                itens = [j["titulo"][:70] for j in self.motor.janelas()]
+                # GUARDA a lista junto com os itens: o índice do Choice passa a
+                # ter um significado estável (ver _janelas_cache).
+                self._alvos_janelas = self.motor.janelas()
+                itens = [j["titulo"][:70] for j in self._alvos_janelas]
         except Exception as e:
+            self._alvos_janelas = []
             itens = [f"{t('recorder.erro')}: {e}"]
         self.escolha_alvo.Set(itens or ["—"])
         if itens:
@@ -627,11 +652,27 @@ class PainelGravacao(wx.Panel):
         if modo == "monitor":
             o.monitor = max(0, self.escolha_alvo.GetSelection())
         elif modo == "janela":
-            janelas = self.motor.janelas() if self.motor else []
+            # ── HWND DO CACHE, NAO DA LISTA NOVA ──
+            # O índice do Choice foi escolhido sobre a lista que CarregarAlvos()
+            # mostrou. Chamar motor.janelas() de novo aqui pegava uma lista
+            # DIFERENTE (o Chrome abre/fecha janelas o tempo todo) e o índice
+            # apontava para outra janela — a captura saía PRETA.
+            # Medido: log do app com `executable: chrome.exe` e sem `title:`.
+            janelas = self._janelas_cache()
             i = self.escolha_alvo.GetSelection()
             if 0 <= i < len(janelas):
                 o.janela_hwnd = janelas[i]["hwnd"]
                 o.pid_alvo = janelas[i]["pid"]
+            else:
+                # cache vazio (lista nunca carregada ou fonte trocada agora):
+                # recarrega e usa o índice, mas avisa se não casar.
+                janelas = self.motor.janelas() if self.motor else []
+                if 0 <= i < len(janelas):
+                    o.janela_hwnd = janelas[i]["hwnd"]
+                    o.pid_alvo = janelas[i]["pid"]
+                elif janelas:
+                    o.janela_hwnd = janelas[0]["hwnd"]
+                    o.pid_alvo = janelas[0]["pid"]
         elif modo == "camera":
             o.camera = self.escolha_camera.GetStringSelection()
 

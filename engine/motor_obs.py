@@ -480,9 +480,21 @@ class Motor:
                 alvo = self._janela_id(int(desc["hwnd"]))
             if alvo:
                 settings["window"] = alvo
-            settings.setdefault("method", 2)          # WGC
+            # `method` 2 = WGC (Windows Graphics Capture). MEDIDO: WGC captura
+            # a janela mesmo quando ela esta' coberta por outra ou sem foco.
+            # BitBlt (1) devolve PRETO nesses casos e com janelas aceleradas
+            # por GPU. Automatic (0) escolhe BitBlt em varios casos e tambem
+            # sai preto — por isso vai o numero 2 fixo, nao "Automatic".
+            #
+            # ATENCAO: a janela MINIMIZADA sai preta em QUALQUER metodo
+            # (medido: YAVG=16 com WGC). Nao ha' como contornar isso na
+            # fonte; o aviso ao usuario fica em `_janela_minimizada()`.
+            settings.setdefault("method", 2)
             settings.setdefault("priority", 1)
-            settings.setdefault("capture_cursor", True)
+            # o setting do cursor chama-se `cursor` no win-capture (o nome
+            # `capture_cursor` e' de OUTRAS fontes e aqui e' ignorado —
+            # medido em get_properties()).
+            settings.setdefault("cursor", True)
             settings.setdefault("client_area", False)
         elif kind == FONTE_CAMERA:
             cam = desc.get("camera")
@@ -684,6 +696,25 @@ class Motor:
     def _usar_mic(self) -> bool:
         o = getattr(self, "_opcoes_ativas", None)
         return bool(o is not None and o.audio in ("mic", "both"))
+
+    @staticmethod
+    def janela_minimizada(hwnd: int) -> bool:
+        """A janela esta' minimizada? (gravar assim sai PRETO em qualquer metodo)
+
+        MEDIDO com o Posty (Chrome) no mesmo harness:
+            primeiro plano   YAVG=70.7  ok
+            atras de outra   YAVG=70.7  ok
+            MINIMIZADA       YAVG=16.0  PRETO
+
+        O WGC entrega um quadro preto para janela minimizada — nao e' bug do
+        nosso codigo, e' como o Windows composita. Serve para AVISAR o usuario
+        antes de gravar, em vez de entregar um arquivo preto sem explicacao.
+        """
+        try:
+            import ctypes
+            return bool(ctypes.windll.user32.IsIconic(int(hwnd)))
+        except Exception:
+            return False
 
     def _resolucao_nativa(self, o: Opcoes) -> tuple[int, int]:
         """Resolução do alvo quando o usuário escolhe "fonte"."""
@@ -1025,6 +1056,12 @@ class Motor:
         fontes = self._fontes_do_modo(o)
         if not fontes:
             raise RuntimeError("nenhuma fonte para o modo escolhido")
+        # AVISO DE JANELA MINIMIZADA: gravar assim sai PRETO (medido: YAVG=16
+        # com WGC, o metodo correto). O libobs nao reclama — o arquivo so' fica
+        # preto — entao o aviso tem que sair daqui, antes de gravar.
+        if o.modo == "janela" and o.janela_hwnd and self.janela_minimizada(o.janela_hwnd):
+            sessao.aviso = ("A janela está minimizada — a gravação vai sair "
+                            "preta. Restaure a janela antes de gravar.")
         cena = self.criar_cena(f"sessao-{int(time.time())}", fontes)
         sessao.cena = cena
         sessao.fontes = fontes

@@ -748,6 +748,54 @@ class Motor:
             return False
 
     @staticmethod
+    def descloakar(hwnd: int) -> bool:
+        """Traz a janela para a tela, o que REMOVE o cloaking do DWM.
+
+        POR QUE ISTO RESOLVE (medido, nao deduzido):
+        o Windows marca como "cloaked" a janela que nao esta' sendo
+        compositada (fora do monitor atual, em outro desktop virtual, ou
+        "fantasma" criada por navegador). Enquanto cloaked, o WGC entrega
+        quadro PRETO e o libobs grava preto sem avisar.
+
+        Medido na "Nova guia - Google Chrome":
+            antes:  cloaked=2  -> arquivo YAVG=16.0  (preto)
+            ShowWindow(SW_RESTORE) + SetForegroundWindow
+            depois: cloaked=0  -> arquivo YAVG=156.1 (com imagem)
+
+        Portanto a correcao NAO e' avisar e desistir: e' ATIVAR a janela
+        antes de abrir a captura. Devolve True se conseguiu descloakar.
+        """
+        try:
+            import ctypes
+            from ctypes import wintypes
+            u = ctypes.windll.user32
+            dwm = ctypes.windll.dwmapi
+            h = int(hwnd)
+            if not u.IsWindow(h):
+                return False
+
+            def cloaked() -> bool:
+                c = ctypes.c_int(0)
+                hr = dwm.DwmGetWindowAttribute(h, 14, ctypes.byref(c),
+                                               ctypes.sizeof(c))
+                return hr == 0 and c.value != 0
+
+            if u.IsIconic(h):
+                u.ShowWindow(h, 9)          # SW_RESTORE
+            if cloaked():
+                u.ShowWindow(h, 5)          # SW_SHOW
+                u.BringWindowToTop(h)
+                u.SetForegroundWindow(h)
+            # espera curta: o DWM leva alguns quadros para descloakar
+            for _ in range(20):
+                if not cloaked():
+                    return True
+                ctypes.windll.kernel32.Sleep(50)
+            return not cloaked()
+        except Exception:
+            return False
+
+    @staticmethod
     def motivo_preto(hwnd: int) -> str:
         """Texto do aviso quando a janela vai gravar preta (vazio se ok)."""
         try:
@@ -1108,6 +1156,19 @@ class Motor:
         except Exception as e:
             print(f"[motor] resolução {w}x{h}: {e}")
 
+        # ── JANELA: DESCLOAKAR ANTES DE CAPTURAR ──
+        # Se a janela esta' cloaked pelo DWM (fora do monitor atual, outro
+        # desktop virtual, "fantasma" de navegador) o WGC entrega quadro
+        # PRETO. Traze-la para a tela resolve. Medido: cloaked=2 -> preto;
+        # apos ShowWindow+SetForegroundWindow cloaked=0 -> YAVG=156 (imagem).
+        if o.modo == "janela" and o.janela_hwnd:
+            if self.descloakar(o.janela_hwnd):
+                logger("motor").info("janela %s descloakada antes de gravar",
+                                     int(o.janela_hwnd))
+            else:
+                logger("motor").warning(
+                    "janela %s continua cloaked/minimizada — a gravacao vai "
+                    "sair preta", int(o.janela_hwnd))
         # ── cena conforme o modo ──
         fontes = self._fontes_do_modo(o)
         if not fontes:
